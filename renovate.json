@@ -1,0 +1,60 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard"
+  ],
+  "enabledManagers": [
+    "pep621",
+    "github-actions",
+    "homeassistant-manifest",
+    "nix",
+    "custom.regex"
+  ],
+  "nix": {
+    "enabled": true
+  },
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": [
+      "before 6am on monday"
+    ]
+  },
+  "timezone": "Europe/Berlin",
+  "automerge": false,
+  "packageRules": [
+    {
+      "description": "Keep Python runtime updates together",
+      "matchManagers": [
+        "pep621",
+        "homeassistant-manifest"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "Python runtime dependencies"
+    },
+    {
+      "description": "Group GitHub Actions updates",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "groupName": "GitHub Actions"
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/ci\\.yaml$/"
+      ],
+      "matchStrings": [
+        "pip install homeassistant==(?<currentValue>[0-9.]+)"
+      ],
+      "depNameTemplate": "homeassistant",
+      "datasourceTemplate": "pypi",
+      "versioningTemplate": "pep440"
+    }
+  ]
+}
