@@ -419,32 +419,7 @@ class EmployeePortal:
         if not await holder.locator("input:visible, select:visible").count():
             await header.locator(":scope > div").first.click()
             await self.settle()
-        fields = await holder.locator(".me-form-group").evaluate_all("""es=>es
-            .filter(e=>e.checkVisibility()).map(e=>({
-                label:e.querySelector('label')?.innerText,
-                value:e.querySelector('select')?.selectedOptions[0]?.text
-                    ?? e.querySelector('input,textarea')?.value
-                    ?? e.querySelector('.me-form-item-div')?.innerText
-            }))""")
-        pairs = [
-            (normalize(f.get("label") or "").rstrip(":"), (f.get("value") or "").strip())
-            for f in fields
-        ]
-        entries = []
-        current = {}
-        for label, value in pairs:
-            if label in {"start time", "beginn", "startzeit"} and value:
-                if current:
-                    entries.append(current)
-                current = {"start": value}
-            elif current and label in {"end time", "ende", "endzeit"}:
-                current["end"] = value
-            elif current and label in {"working time type", "arbeitszeitart"}:
-                current["type"] = value
-            elif current and label in {"comment", "kommentar", "bemerkung"}:
-                current["comment"] = value
-        if current:
-            entries.append(current)
+        entries = await self.editor_entries(holder)
         header_text = await header.inner_text()
         if not entries and re.search(
             r"Open working time|Offene Arbeitszeit|\b\d{2}:\d{2}\s*\n\s*\d{2}:\d{2}\b",
@@ -491,6 +466,36 @@ class EmployeePortal:
             await info.click()
             await self.settle()
         return metrics, entries
+
+    async def editor_entries(self, holder) -> list[dict]:
+        """Read the visible rows without changing the portal editor."""
+        fields = await holder.locator(".me-form-group").evaluate_all("""es=>es
+            .filter(e=>e.checkVisibility()).map(e=>({
+                label:e.querySelector('label')?.innerText,
+                value:e.querySelector('select')?.selectedOptions[0]?.text
+                    ?? e.querySelector('input,textarea')?.value
+                    ?? e.querySelector('.me-form-item-div')?.innerText
+            }))""")
+        pairs = [
+            (normalize(f.get("label") or "").rstrip(":"), (f.get("value") or "").strip())
+            for f in fields
+        ]
+        entries = []
+        current = {}
+        for label, value in pairs:
+            if label in {"start time", "beginn", "startzeit"} and value:
+                if current:
+                    entries.append(current)
+                current = {"start": value}
+            elif current and label in {"end time", "ende", "endzeit"}:
+                current["end"] = value
+            elif current and label in {"working time type", "arbeitszeitart"}:
+                current["type"] = value
+            elif current and label in {"comment", "kommentar", "bemerkung"}:
+                current["comment"] = value
+        if current:
+            entries.append(current)
+        return entries
 
     async def discard_row(self, start_field) -> None:
         """Remove a request's own draft row; never guess which entry to delete."""
@@ -588,10 +593,6 @@ class EmployeePortal:
             raise PortalError("writes_disabled", 403)
         holder = header.locator("..").first
         controls = holder.locator("input,select,textarea")
-        previous_values = await controls.evaluate_all(
-            "es=>Object.fromEntries(es.map(e=>[e.id,e.value]))"
-        )
-        previous_ids = set(previous_values)
         new_start = None
         try:
             await add.click()
@@ -604,11 +605,27 @@ class EmployeePortal:
                     "label", has_text=re.compile(r"^\s*(Start time|Startzeit|Beginn)\s*$", re.I)
                 )
             ).locator("input")
-            added = [
-                node
-                for node in await starts.all()
-                if await node.get_attribute("id") not in previous_ids
-            ]
+            # Adding a row regenerates the existing fields' DOM IDs. Existing
+            # intervals have closed ends (validated above); only the new row is open.
+            actual = await self.editor_entries(holder)
+            if len(actual) != len(entries) + 1 or any(e not in actual for e in entries):
+                raise PortalError("write_uncertain", 502)
+            added = []
+            for node in await starts.all():
+                candidate = node.locator(
+                    "xpath=ancestor::div[contains(concat(' ',normalize-space(@class),' '),' row ')][2]"
+                )
+                end_control = (
+                    candidate.locator(".me-form-group")
+                    .filter(
+                        has=page.locator(
+                            "label", has_text=re.compile(r"^\s*(End time|Endzeit|Ende)\s*$", re.I)
+                        )
+                    )
+                    .locator("input")
+                )
+                if await end_control.count() == 1 and not await end_control.input_value():
+                    added.append(node)
             if len(added) != 1:
                 raise PortalError("write_uncertain", 502)
             new_id = await added[0].get_attribute("id")
@@ -618,6 +635,17 @@ class EmployeePortal:
             row = new_start.locator(
                 "xpath=ancestor::div[contains(concat(' ',normalize-space(@class),' '),' row ')][2]"
             )
+
+            new_ids = set(
+                await row.locator("input,select,textarea").evaluate_all("es=>es.map(e=>e.id)")
+            )
+            previous_values = {
+                key: value
+                for key, value in (
+                    await controls.evaluate_all("es=>Object.fromEntries(es.map(e=>[e.id,e.value]))")
+                ).items()
+                if key not in new_ids
+            }
 
             async def field(pattern: str):
                 group = row.locator(".me-form-group").filter(
@@ -676,6 +704,7 @@ class EmployeePortal:
         try:
             await save.click()
             await self.settle()
+            await page.reload(wait_until="commit", timeout=45000)
             _, verified = await self.working_day(start.date())
             matches = [
                 e

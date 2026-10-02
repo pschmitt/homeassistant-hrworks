@@ -4,16 +4,19 @@ from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
 
 from .api import WorkerClient
-from .const import PLATFORMS
-from .coordinator import HrworksCoordinator, clear_issues
+from .const import DOMAIN, PLATFORMS
+from .coordinator import HrworksCoordinator, clear_issues, create_issue
 from .services import register_services
 
 type HrworksConfigEntry = ConfigEntry[HrworksCoordinator]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: HrworksConfigEntry) -> bool:
+    if ir.async_get(hass).async_get_issue(DOMAIN, f"{entry.entry_id}_write_uncertain"):
+        create_issue(hass, entry, "write_uncertain")
     client = WorkerClient(hass, entry.data)
     coordinator = HrworksCoordinator(hass, entry, client)
     try:

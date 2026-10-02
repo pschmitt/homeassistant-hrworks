@@ -211,7 +211,15 @@
     },
     "write_uncertain": {
       "title": "Arbeitszeiteintrag prüfen",
-      "description": "Ein Eintrag für {name} konnte nicht bestätigt werden. Prüfe den Tag in HR WORKS, bevor du es erneut versuchst; der Eintrag könnte bereits gespeichert worden sein. Einträge werden niemals automatisch wiederholt."
+      "description": "Ein Eintrag für {name} konnte nicht bestätigt werden. Prüfe den Tag in HR WORKS, bevor du es erneut versuchst; der Eintrag könnte bereits gespeichert worden sein. Einträge werden niemals automatisch wiederholt.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Arbeitszeit geprüft",
+            "description": "Prüfe den betroffenen Tag direkt in HR WORKS. Bestätige erst, wenn du weißt, welche Einträge gespeichert wurden und ob ein offener Entwurf entfernt werden muss. Diese Bestätigung löscht nur den Reparaturhinweis; sie ändert keine Arbeitszeiten."
+          }
+        }
+      }
     },
     "ssh_host_key": {
       "title": "SSH-Hostschlüssel prüfen",

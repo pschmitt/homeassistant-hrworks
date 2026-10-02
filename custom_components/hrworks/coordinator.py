@@ -38,7 +38,7 @@ def create_issue(hass, entry, key: str) -> None:
         hass,
         DOMAIN,
         f"{entry.entry_id}_{key}",
-        is_fixable=key == "session_expired",
+        is_fixable=key in {"session_expired", "write_uncertain"},
         severity=ir.IssueSeverity.WARNING,
         translation_key=key,
         translation_placeholders={"name": entry.title},

@@ -3,6 +3,7 @@
 import voluptuous as vol
 from homeassistant.components.repairs import RepairsFlow
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.selector import TextSelector, TextSelectorConfig, TextSelectorType
 
 from .api import WorkerClient, WorkerError
@@ -98,5 +99,23 @@ class EmployeeLoginRepair(RepairsFlow):
         return self.async_create_entry(title="", data={})
 
 
+class WorkingTimeReviewRepair(RepairsFlow):
+    """Acknowledge an uncertain submission only after reviewing the portal."""
+
+    def __init__(self, issue_id: str) -> None:
+        self.issue_id = issue_id
+
+    async def async_step_init(self, user_input=None):
+        return await self.async_step_confirm()
+
+    async def async_step_confirm(self, user_input=None):
+        if user_input is not None:
+            ir.async_delete_issue(self.hass, DOMAIN, self.issue_id)
+            return self.async_create_entry(title="", data={})
+        return self.async_show_form(step_id="confirm", data_schema=vol.Schema({}))
+
+
 async def async_create_fix_flow(hass, issue_id, data):
+    if issue_id.endswith("_write_uncertain"):
+        return WorkingTimeReviewRepair(issue_id)
     return EmployeeLoginRepair((data or {}).get("entry_id", ""))

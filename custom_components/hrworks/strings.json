@@ -211,7 +211,15 @@
     },
     "write_uncertain": {
       "title": "Check the working-time submission",
-      "description": "A submission for {name} could not be verified. Inspect the day in HR WORKS before trying again; the entry may already have been saved. Submissions are never retried automatically."
+      "description": "A submission for {name} could not be verified. Inspect the day in HR WORKS before trying again; the entry may already have been saved. Submissions are never retried automatically.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Working time reviewed",
+            "description": "Review the affected day directly in HR WORKS. Confirm only after checking which entries were saved and whether an open draft needs removal. This confirmation clears the repair notice; it does not change working times."
+          }
+        }
+      }
     },
     "ssh_host_key": {
       "title": "Verify the SSH host key",
