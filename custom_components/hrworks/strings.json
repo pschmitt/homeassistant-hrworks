@@ -211,7 +211,6 @@
     },
     "write_uncertain": {
       "title": "Check the working-time submission",
-      "description": "A submission for {name} could not be verified. Inspect the day in HR WORKS before trying again; the entry may already have been saved. Submissions are never retried automatically.",
       "fix_flow": {
         "step": {
           "confirm": {

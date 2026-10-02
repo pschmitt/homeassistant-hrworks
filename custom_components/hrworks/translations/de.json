@@ -211,7 +211,6 @@
     },
     "write_uncertain": {
       "title": "Arbeitszeiteintrag prüfen",
-      "description": "Ein Eintrag für {name} konnte nicht bestätigt werden. Prüfe den Tag in HR WORKS, bevor du es erneut versuchst; der Eintrag könnte bereits gespeichert worden sein. Einträge werden niemals automatisch wiederholt.",
       "fix_flow": {
         "step": {
           "confirm": {
