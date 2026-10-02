@@ -414,10 +414,11 @@ class EmployeePortal:
             raise PortalError("invalid_interval")
         if not await header.is_visible():
             raise PortalError("portal_changed", 502)
-        # Expand the day's entry list, which contains the authoritative split rows.
-        await header.locator(":scope > div").first.click()
-        await self.settle()
         holder = header.locator("..").first
+        # Expansion is retained by the portal. Never toggle an already-open editor closed.
+        if not await holder.locator("input:visible, select:visible").count():
+            await header.locator(":scope > div").first.click()
+            await self.settle()
         fields = await holder.locator(".me-form-group").evaluate_all("""es=>es
             .filter(e=>e.checkVisibility()).map(e=>({
                 label:e.querySelector('label')?.innerText,
@@ -444,6 +445,13 @@ class EmployeePortal:
                 current["comment"] = value
         if current:
             entries.append(current)
+        header_text = await header.inner_text()
+        if not entries and re.search(
+            r"Open working time|Offene Arbeitszeit|\b\d{2}:\d{2}\s*\n\s*\d{2}:\d{2}\b",
+            header_text,
+            re.I,
+        ):
+            raise PortalError("portal_changed", 502)
         # The info popup reports net credited work and target time, including break rules.
         info = header.locator("a").filter(has=page.locator(".icon-streamline-information-circle"))
         metrics = {}
@@ -483,6 +491,28 @@ class EmployeePortal:
             await info.click()
             await self.settle()
         return metrics, entries
+
+    async def discard_row(self, start_field) -> None:
+        """Remove a request's own draft row; never guess which entry to delete."""
+        page = await self.open()
+        row = start_field.locator(
+            "xpath=ancestor::div[contains(concat(' ',normalize-space(@class),' '),' row ')][2]"
+        )
+        await row.locator("a.m-dropdown__toggle").click()
+        await self.settle()
+        delete = row.get_by_role("link", name=re.compile(r"^(Delete|Löschen)$"), exact=True)
+        if await delete.count() != 1:
+            raise PortalError("write_uncertain", 502)
+        # Portal dropdowns may extend outside the scroll container.
+        await delete.evaluate("el => el.click()")
+        await self.settle()
+        modal = page.locator(".modal.show")
+        if await modal.count() != 1:
+            raise PortalError("write_uncertain", 502)
+        await modal.get_by_role("button", name=re.compile(r"^(Yes|Ja)$")).click()
+        await self.settle()
+        if await start_field.count():
+            raise PortalError("write_uncertain", 502)
 
     async def record(self, data: dict) -> dict:
         """Submit one interval, preserving all existing rows and refusing ambiguity."""
@@ -556,46 +586,93 @@ class EmployeePortal:
         add = header.locator("a").filter(has=page.locator(".icon-streamline-add"))
         if not await add.count() or not await add.is_visible():
             raise PortalError("writes_disabled", 403)
-        await add.click()
-        await self.settle()
         holder = header.locator("..").first
-        # A new editable row is appended to this day; never edit an existing row.
-        groups = holder.locator(".me-form-group").filter(has=page.locator("input,select,textarea"))
+        controls = holder.locator("input,select,textarea")
+        previous_values = await controls.evaluate_all(
+            "es=>Object.fromEntries(es.map(e=>[e.id,e.value]))"
+        )
+        previous_ids = set(previous_values)
+        new_start = None
+        try:
+            await add.click()
+            await self.settle()
+            groups = holder.locator(".me-form-group").filter(
+                has=page.locator("input,select,textarea")
+            )
+            starts = groups.filter(
+                has=page.locator(
+                    "label", has_text=re.compile(r"^\s*(Start time|Startzeit|Beginn)\s*$", re.I)
+                )
+            ).locator("input")
+            added = [
+                node
+                for node in await starts.all()
+                if await node.get_attribute("id") not in previous_ids
+            ]
+            if len(added) != 1:
+                raise PortalError("write_uncertain", 502)
+            new_id = await added[0].get_attribute("id")
+            if not new_id:
+                raise PortalError("write_uncertain", 502)
+            new_start = page.locator("[id=" + json.dumps(new_id) + "]")
+            row = new_start.locator(
+                "xpath=ancestor::div[contains(concat(' ',normalize-space(@class),' '),' row ')][2]"
+            )
 
-        async def field(pattern: str):
-            return groups.filter(has=page.locator("label", has_text=re.compile(pattern, re.I))).last
+            async def field(pattern: str):
+                group = row.locator(".me-form-group").filter(
+                    has=page.locator("label", has_text=re.compile(pattern, re.I))
+                )
+                control = group.locator("input,select,textarea")
+                if await control.count() != 1:
+                    raise PortalError("portal_changed", 502)
+                identifier = await control.get_attribute("id")
+                if not identifier:
+                    raise PortalError("portal_changed", 502)
+                return page.locator("[id=" + json.dumps(identifier) + "]")
 
-        start_field = await field(r"Start time|Startzeit|Beginn")
-        end_field = await field(r"End time|Endzeit|Ende")
-        type_field = await field(r"Working time type|Arbeitszeitart")
-        comment_field = await field(r"Comment|Kommentar|Bemerkung")
-        select = type_field.locator("select")
-        options = await select.locator("option").all_text_contents()
-        chosen = next((label for label in options if normalize(label) in labels), None)
-        if chosen is None:
-            # Discard the unsaved form by navigation, without submitting a replacement type.
-            await self.navigate("working-times")
-            raise PortalError("writes_disabled", 403)
-        await start_field.locator("input").fill(wanted_start)
-        await start_field.locator("input").press("Tab")
-        await end_field.locator("input").fill(wanted_end)
-        await end_field.locator("input").press("Tab")
-        await select.select_option(label=chosen)
-        await comment_field.locator("input,textarea").fill(comment)
-        await comment_field.locator("input,textarea").press("Tab")
-        await self.settle()
-        # Check the actual values before the single save attempt.
-        if (
-            await start_field.locator("input").input_value() != wanted_start
-            or await end_field.locator("input").input_value() != wanted_end
-            or await select.locator("option:checked").inner_text() != chosen
-        ):
-            raise PortalError("portal_changed", 502)
-        save = holder.get_by_role("link", name=re.compile(r"^\s*(Save|Speichern)\s*$"))
-        if not await save.count():
-            save = holder.get_by_role("button", name=re.compile(r"^\s*(Save|Speichern)\s*$"))
-        if await save.count() != 1:
-            raise PortalError("portal_changed", 502)
+            start_field = new_start
+            end_field = await field(r"^\s*(End time|Endzeit|Ende)\s*$")
+            select = await field(r"^\s*(Working time type|Arbeitszeitart)\s*$")
+            comment_field = await field(r"^\s*(Comment|Kommentar|Bemerkung)\s*$")
+            options = await select.locator("option").all_text_contents()
+            chosen = next((label for label in options if normalize(label) in labels), None)
+            if chosen is None:
+                raise PortalError("writes_disabled", 403)
+            for control, value in [(start_field, wanted_start), (end_field, wanted_end)]:
+                await control.press("ControlOrMeta+A")
+                await control.press_sequentially(value)
+                await control.press("Tab")
+            await select.select_option(label=chosen)
+            await comment_field.fill(comment)
+            await comment_field.press("Tab")
+            await self.settle()
+            if (
+                await start_field.input_value() != wanted_start
+                or await end_field.input_value() != wanted_end
+                or await select.locator("option:checked").inner_text() != chosen
+                or await comment_field.input_value() != comment
+            ):
+                raise PortalError("portal_changed", 502)
+            current_values = await controls.evaluate_all(
+                "es=>Object.fromEntries(es.map(e=>[e.id,e.value]))"
+            )
+            if any(current_values.get(key) != value for key, value in previous_values.items()):
+                raise PortalError("portal_changed", 502)
+            save = page.get_by_role("button", name=re.compile(r"^\s*(Save|Speichern)\s*$"))
+            if await save.count() != 1:
+                raise PortalError("portal_changed", 502)
+        except Exception:
+            # The portal retains added rows across sessions even before Save.
+            # Remove only the field identified as newly added by this request.
+            if new_start is not None:
+                try:
+                    await self.discard_row(new_start)
+                except Exception:
+                    raise PortalError("write_uncertain", 502) from None
+            else:
+                raise PortalError("write_uncertain", 502) from None
+            raise
         try:
             await save.click()
             await self.settle()
@@ -645,11 +722,11 @@ class EmployeePortal:
                         if not options["include_pending"] or not pending:
                             continue
                     event_map[event["uid"]] = event
-        today_metrics, _ = await self.working_day(today)
+        today_metrics, today_entries = await self.working_day(today)
         metrics.update(today_metrics)
         page = await self.open()
         text = await page.locator("body").inner_text()
-        clocked_in = None
+        clocked_in = any(e.get("start") and not e.get("end") for e in today_entries)
         if re.search(r"\bClock in\b|\bEinstempeln\b", text):
             clocked_in = False
         elif re.search(r"\bClock out\b|\bAusstempeln\b", text):
