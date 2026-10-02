@@ -9,6 +9,7 @@ from homeassistant.helpers import config_validation as cv
 from .api import WorkerError
 from .const import CONF_WRITES, DOMAIN
 from .coordinator import create_issue
+from .hrworks.models import TYPES
 
 
 def register_services(hass) -> None:
@@ -58,14 +59,7 @@ def register_services(hass) -> None:
                 vol.Optional("config_entry_id"): cv.string,
                 vol.Required("start"): cv.string,
                 vol.Required("end"): cv.string,
-                vol.Optional("type", default="working_time"): vol.In(
-                    [
-                        "working_time",
-                        "doctors_appointment",
-                        "business_errand",
-                        "education_and_training",
-                    ]
-                ),
+                vol.Optional("type", default="working_time"): vol.In(TYPES),
                 vol.Optional("comment", default=""): vol.All(cv.string, vol.Length(max=500)),
                 vol.Optional("dry_run", default=True): cv.boolean,
             }

@@ -7,10 +7,25 @@ flake:
 }:
 let
   cfg = config.programs.hrworksWorker;
+  cliCommands =
+    map
+      (
+        name:
+        pkgs.writeShellApplication {
+          inherit name;
+          text = ''
+            exec ${cfg.package}/bin/hrworks "$@"
+          '';
+        }
+      )
+      [
+        "hrworks"
+        "hr-works"
+      ];
   command = pkgs.writeShellApplication {
     name = "hrworks-worker";
     text = ''
-      exec ${lib.getExe cfg.package} ${
+      exec ${lib.getExe' cfg.package "hrworks-worker"} ${
         lib.escapeShellArgs (
           [
             "--cdp-url"
@@ -52,6 +67,6 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    environment.systemPackages = [ command ];
+    environment.systemPackages = [ command ] ++ cliCommands;
   };
 }

@@ -175,3 +175,21 @@ Browser integration remains dependent on HR WORKS’ private portal layout. It
 cannot offer the stability of an official API. Synthetic browser fixtures cover
 editor layout variations; authentication and coordinator regression tests run
 against Home Assistant itself. All fixtures use invented data.
+
+## Python CLI and shared library
+
+The integration now bundles the same independent Python client used by the
+`hrworks` / `hr-works` CLI. The default output is colorful, aligned TSV in a
+terminal and literal TSV in pipes. `--json` produces one clean JSON document.
+
+```bash
+uv tool install git+https://github.com/pschmitt/homeassistant-hrworks.git
+hrworks --help
+```
+
+One-shot execution is supported with
+`uvx --from git+https://github.com/pschmitt/homeassistant-hrworks.git hrworks --help`.
+Nix installs the CLI alongside the configured worker. Read the
+[CLI guide](docs/cli.md) for every subcommand, rbw/SSH setup, calendars, CSV imports,
+private secrets and shell completions, or the [Python guide](docs/python.md) to
+use the shared library directly.

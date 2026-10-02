@@ -17,6 +17,7 @@ from pathlib import Path
 from urllib.parse import urljoin
 from zoneinfo import ZoneInfo
 
+from hrworks.models import TYPE_LABELS
 from playwright.async_api import Browser, BrowserContext, Page
 from playwright.async_api import TimeoutError as PlaywrightTimeout
 
@@ -143,7 +144,12 @@ class EmployeePortal:
             await page.locator("body").wait_for(timeout=45000)
         if "login.hrworks.de" in page.url:
             raise PortalError("session_expired", 403)
-        await page.locator(".m-portlet").first.wait_for(state="visible", timeout=45000)
+        try:
+            await page.locator(".m-portlet").first.wait_for(state="visible", timeout=45000)
+        except PlaywrightTimeout:
+            if "login.hrworks.de" in page.url:
+                raise PortalError("session_expired", 403) from None
+            raise
         await self.settle()
         if "login.hrworks.de" in page.url:
             raise PortalError("session_expired", 403)
@@ -160,6 +166,12 @@ class EmployeePortal:
             await self.settle()
             await self.save_session()
             return {"profile_id": self.identity, "authenticated": True}
+        if not force:
+            # An expired session may retain cookies which interfere with a new
+            # login. Reuse authenticated sessions, then start login cleanly.
+            await self.close()
+            page = await self.open(fresh=True)
+            await page.goto(LOGIN_URL, wait_until="domcontentloaded")
         await page.locator("input[name=company]").fill(company)
         await page.locator("input[name=company]").press("Tab")
         await self.settle()
@@ -559,12 +571,7 @@ class EmployeePortal:
                 or len(comment) > 500
             ):
                 raise ValueError
-            type_labels = {
-                "working_time": ("Working time", "Arbeitszeit"),
-                "doctors_appointment": ("Doctor's appointment", "Arztgang"),
-                "business_errand": ("Business errand", "Dienstgang"),
-                "education_and_training": ("Education and Training", "Fortbildung"),
-            }
+            type_labels = TYPE_LABELS
             if kind not in type_labels:
                 raise ValueError
         except (KeyError, TypeError, ValueError):

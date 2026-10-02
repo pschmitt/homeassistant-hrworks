@@ -9,13 +9,14 @@ import logging
 import os
 import re
 import sys
+from datetime import date, datetime
 from pathlib import Path
 
 from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import async_playwright
 
 from . import PROTOCOL_VERSION
-from .portal import EmployeePortal, PortalError, profile_id
+from .portal import BERLIN, EmployeePortal, PortalError, profile_id
 
 LOGGER = logging.getLogger(__name__)
 
@@ -69,7 +70,7 @@ class Worker:
             return {
                 "protocol_version": PROTOCOL_VERSION,
                 "writes_enabled": self.enable_writes,
-                "capabilities": ["fresh_login"],
+                "capabilities": ["fresh_login", "day", "account", "logout"],
             }
         if not isinstance(data, dict):
             raise PortalError("invalid_request")
@@ -90,12 +91,35 @@ class Worker:
                     data["password"],
                     force=data.get("force", False),
                 )
-        match = re.fullmatch(r"profiles/([a-f0-9]{64})/(mfa|snapshot|record)", path)
+        match = re.fullmatch(
+            r"profiles/([a-f0-9]{64})/(mfa|snapshot|record|day|account|logout)", path
+        )
         if not match:
             raise PortalError("not_found", 404)
+        if match[2] == "logout":
+            existing = self.profiles.get(match[1])
+            if existing:
+                async with existing.lock:
+                    await existing.close()
+                    existing.state_path.unlink(missing_ok=True)
+                    self.profiles.pop(match[1], None)
+            else:
+                (self.state_dir / f"{match[1]}.json").unlink(missing_ok=True)
+            return {"logged_out": True}
         portal = await self.portal(match[1])
         async with portal.lock:
             match match[2]:
+                case "day":
+                    try:
+                        day = date.fromisoformat(data["date"])
+                    except (KeyError, TypeError, ValueError):
+                        raise PortalError("invalid_request") from None
+                    metrics, entries = await portal.working_day(day)
+                    return {"date": day.isoformat(), "metrics": metrics, "entries": entries}
+                case "account":
+                    metrics, account = await portal.account(datetime.now(BERLIN).date())
+                    await portal.save_session()
+                    return {"metrics": metrics, "account": account}
                 case "mfa":
                     if not isinstance(data.get("code"), str):
                         raise PortalError("invalid_request")

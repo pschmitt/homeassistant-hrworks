@@ -1,15 +1,10 @@
 """Published RFC vectors; no employee credentials."""
 
 import base64
-import importlib.util
 import unittest
-from pathlib import Path
 
-spec = importlib.util.spec_from_file_location(
-    "totp", Path(__file__).parents[1] / "custom_components/hrworks/totp.py"
-)
-totp = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(totp)
+from hrworks import totp
+
 URI = "otpauth://totp/Example:test?secret=JBSWY3DPEHPK3PXP"
 
 

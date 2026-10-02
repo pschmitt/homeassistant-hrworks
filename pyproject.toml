@@ -3,18 +3,20 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "hrworks-browser-worker"
-version = "1.0.0"
-description = "Browser connection for the Home Assistant HR WORKS integration"
+name = "hrworks-employee"
+version = "2.0.0"
+description = "HR WORKS employee library, Rich CLI and browser worker"
 requires-python = ">=3.12"
-dependencies = ["playwright==1.63.0"]
+dependencies = ["asyncssh>=2.14.2", "playwright==1.63.0", "rich>=13.9", "typer>=0.16"]
 license = "MIT"
 
 [project.scripts]
+hrworks = "hrworks.cli:main"
+hr-works = "hrworks.cli:main"
 hrworks-worker = "hrworks_worker.server:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["hrworks_worker"]
+packages = ["hrworks_worker", "custom_components/hrworks/hrworks"]
 
 [tool.ruff]
 target-version = "py312"

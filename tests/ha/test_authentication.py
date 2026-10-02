@@ -273,3 +273,27 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
         flow.async_update_and_abort = MagicMock(return_value={"type": "done"})
         await flow._finish()
         flow.hass.config_entries.async_schedule_reload.assert_called_once_with("entry-id")
+
+
+class LifecycleTests(unittest.IsolatedAsyncioTestCase):
+    async def test_close_removes_listener_and_closes_shared_transport(self):
+        remove = MagicMock()
+        hass = MagicMock()
+        hass.bus.async_listen_once.return_value = remove
+        client = WorkerClient(hass, {})
+        client.transport = SimpleNamespace(request=AsyncMock(return_value={}), close=AsyncMock())
+        await client.request("health")
+        await client.request("health")
+        hass.bus.async_listen_once.assert_called_once()
+        await client.close()
+        remove.assert_called_once()
+        client.transport.close.assert_awaited_once()
+
+    async def test_stop_event_does_not_remove_consumed_listener(self):
+        hass = MagicMock()
+        client = WorkerClient(hass, {})
+        client.transport = SimpleNamespace(request=AsyncMock(return_value={}), close=AsyncMock())
+        await client.request("health")
+        await client.close(object())
+        hass.bus.async_listen_once.return_value.assert_not_called()
+        client.transport.close.assert_awaited_once()
