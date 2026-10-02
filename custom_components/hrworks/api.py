@@ -156,9 +156,14 @@ class WorkerClient:
             raise WorkerError("incompatible_worker")
         return result
 
-    async def login(self, company: str, username: str, password: str) -> dict:
+    async def login(
+        self, company: str, username: str, password: str, *, force: bool = False
+    ) -> dict:
+        if force and "fresh_login" not in (await self.health()).get("capabilities", []):
+            raise WorkerError("incompatible_worker")
         result = await self.request(
-            "login", {"company_id": company, "username": username, "password": password}
+            "login",
+            {"company_id": company, "username": username, "password": password, "force": force},
         )
         identity = result.get("profile_id")
         if not isinstance(identity, str) or not re.fullmatch(r"[a-f0-9]{64}", identity):

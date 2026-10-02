@@ -11,16 +11,19 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import WorkerClient, WorkerError
+from .auth import authenticate
 from .const import (
     CONF_FUTURE_DAYS,
     CONF_PAST_DAYS,
     CONF_PENDING,
     CONF_SICKNESS,
+    CONF_TOTP_URI,
     DEFAULT_FUTURE_DAYS,
     DEFAULT_PAST_DAYS,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
 )
+from .totp import InvalidTotp
 
 LOGGER = logging.getLogger(__name__)
 ISSUES = (
@@ -72,17 +75,28 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
     async def _async_update_data(self) -> dict:
         options = self.entry.options
         try:
-            data = await self.client.snapshot(
-                {
-                    CONF_PAST_DAYS: int(options.get(CONF_PAST_DAYS, DEFAULT_PAST_DAYS)),
-                    CONF_FUTURE_DAYS: int(options.get(CONF_FUTURE_DAYS, DEFAULT_FUTURE_DAYS)),
-                    CONF_SICKNESS: options.get(CONF_SICKNESS, True),
-                    CONF_PENDING: options.get(CONF_PENDING, False),
-                }
-            )
+            payload = {
+                CONF_PAST_DAYS: int(options.get(CONF_PAST_DAYS, DEFAULT_PAST_DAYS)),
+                CONF_FUTURE_DAYS: int(options.get(CONF_FUTURE_DAYS, DEFAULT_FUTURE_DAYS)),
+                CONF_SICKNESS: options.get(CONF_SICKNESS, True),
+                CONF_PENDING: options.get(CONF_PENDING, False),
+            }
+            try:
+                data = await self.client.snapshot(payload)
+            except WorkerError as err:
+                if err.code not in {"session_expired", "mfa_required"} or not self.entry.data.get(
+                    CONF_TOTP_URI
+                ):
+                    raise
+                # One read recovery only. Submissions are never replayed.
+                try:
+                    await authenticate(self.client, self.entry.data, force=True)
+                except InvalidTotp:
+                    raise WorkerError("invalid_auth") from None
+                data = await self.client.snapshot(payload)
         except WorkerError as err:
             self.last_error = err.code
-            if err.code in {"session_expired", "mfa_required", "invalid_auth"}:
+            if err.code in {"session_expired", "mfa_required", "invalid_auth", "invalid_code"}:
                 create_issue(self.hass, self.entry, "session_expired")
                 raise ConfigEntryAuthFailed("Employee session needs authentication") from err
             key = (

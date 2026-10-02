@@ -16,9 +16,19 @@ jobs:
       - run: pip install -e . ruff
       - run: ruff check .
       - run: ruff format --check .
+      - run: playwright install --with-deps chromium
       - run: python -m unittest discover -s tests -v
   hassfest:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: home-assistant/actions/hassfest@master
+  homeassistant:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - run: pip install homeassistant==2026.9.4 asyncssh
+      - run: python -m unittest discover -s tests/ha -v

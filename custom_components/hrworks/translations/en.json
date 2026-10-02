@@ -30,18 +30,21 @@
       },
       "account": {
         "title": "Your employee account",
-        "description": "Use your regular HR WORKS employee login. No company API key is needed. During reconfiguration, leave the password blank to keep it.",
+        "description": "Use your employee login. Reconfigure can change company, username and password. Blank secret fields keep saved values. An optional otpauth://totp/... URI enables automatic authenticator codes.",
         "data": {
           "company_id": "Company ID",
           "username": "User ID",
-          "password": "Password"
+          "password": "Password",
+          "totp_uri": "TOTP URI (optional)",
+          "clear_totp": "Remove saved TOTP URI"
         }
       },
       "mfa": {
         "title": "Verify your login",
-        "description": "Enter the current six-digit code from your authenticator. The code is used once and is not stored.",
+        "description": "Enter a current six-digit code or your authenticator’s otpauth://totp/... URI. The URI is saved for future logins; individual codes are never stored.",
         "data": {
-          "code": "Authenticator code"
+          "code": "Authenticator code",
+          "totp_uri": "TOTP URI (optional)"
         }
       }
     },
@@ -61,7 +64,8 @@
       "not_found": "The employee session was not found. Start authentication again.",
       "invalid_request": "The worker rejected this request. Update the integration and worker together.",
       "unknown": "An unexpected error occurred.",
-      "ssh_host_key": "SSH host key verification failed. Verify the host and reconfigure the known_hosts entry."
+      "ssh_host_key": "SSH host key verification failed. Verify the host and reconfigure the known_hosts entry.",
+      "invalid_totp": "Invalid TOTP URI. Use otpauth://totp/... with a Base32 secret and six digits."
     },
     "abort": {
       "already_configured": "This employee account is already configured.",
@@ -162,14 +166,17 @@
             "title": "Sign in again",
             "description": "Continue with the saved employee login. Enter a new password only if it changed.",
             "data": {
-              "password": "Password"
+              "password": "Password",
+              "totp_uri": "TOTP URI (optional)",
+              "clear_totp": "Remove saved TOTP URI"
             }
           },
           "mfa": {
             "title": "Verify your login",
-            "description": "Enter the current six-digit code from your authenticator. The code is used once and is not stored.",
+            "description": "Enter a current six-digit code or your authenticator’s otpauth://totp/... URI. The URI is saved for future logins; individual codes are never stored.",
             "data": {
-              "code": "Authenticator code"
+              "code": "Authenticator code",
+              "totp_uri": "TOTP URI (optional)"
             }
           }
         },
@@ -189,7 +196,8 @@
           "not_found": "The employee session was not found. Start authentication again.",
           "invalid_request": "The worker rejected this request. Update the integration and worker together.",
           "unknown": "An unexpected error occurred.",
-          "ssh_host_key": "SSH host key verification failed. Verify the host and reconfigure the known_hosts entry."
+          "ssh_host_key": "SSH host key verification failed. Verify the host and reconfigure the known_hosts entry.",
+          "invalid_totp": "Invalid TOTP URI. Use otpauth://totp/... with a Base32 secret and six digits."
         },
         "abort": {
           "entry_removed": "The integration entry was removed.",

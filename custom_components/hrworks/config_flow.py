@@ -6,6 +6,8 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.const import CONF_NAME, CONF_PASSWORD, CONF_SCAN_INTERVAL, CONF_USERNAME
 from homeassistant.core import callback
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.selector import (
     BooleanSelector,
     NumberSelector,
@@ -17,6 +19,7 @@ from homeassistant.helpers.selector import (
 )
 
 from .api import WorkerClient, WorkerError
+from .auth import complete_mfa, secret_settings
 from .const import (
     CONF_CODE,
     CONF_COMPANY,
@@ -30,6 +33,7 @@ from .const import (
     CONF_SSH_KNOWN_HOSTS,
     CONF_SSH_PORT,
     CONF_SSH_USERNAME,
+    CONF_TOTP_URI,
     CONF_WORKER_COMMAND,
     CONF_WRITES,
     DEFAULT_FUTURE_DAYS,
@@ -37,6 +41,7 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
 )
+from .totp import InvalidTotp
 
 PASSWORD = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
 
@@ -74,8 +79,18 @@ def account_schema(defaults: dict, *, existing: bool = False) -> vol.Schema:
             vol.Required(CONF_COMPANY, default=defaults.get(CONF_COMPANY, "")): TextSelector(),
             vol.Required(CONF_USERNAME, default=defaults.get(CONF_USERNAME, "")): TextSelector(),
             password: PASSWORD,
+            vol.Optional(CONF_TOTP_URI): PASSWORD,
+            **(
+                {vol.Optional("clear_totp", default=False): BooleanSelector()}
+                if defaults.get(CONF_TOTP_URI)
+                else {}
+            ),
         }
     )
+
+
+def mfa_schema() -> vol.Schema:
+    return vol.Schema({vol.Optional(CONF_CODE): PASSWORD, vol.Optional(CONF_TOTP_URI): PASSWORD})
 
 
 class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -159,19 +174,27 @@ class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
             company = user_input[CONF_COMPANY].strip()
             username = user_input[CONF_USERNAME].strip()
             password = user_input.get(CONF_PASSWORD) or self._data.get(CONF_PASSWORD)
-            if self._entry and (
-                company.casefold() != self._entry.data[CONF_COMPANY].casefold()
-                or username.casefold() != self._entry.data[CONF_USERNAME].casefold()
+            if (
+                self._entry
+                and self.source != "reconfigure"
+                and (
+                    company.casefold() != self._entry.data[CONF_COMPANY].casefold()
+                    or username.casefold() != self._entry.data[CONF_USERNAME].casefold()
+                )
             ):
                 errors["base"] = "different_account"
             elif not password:
                 errors["base"] = "invalid_auth"
             else:
                 try:
-                    result = await self._client.login(company, username, password)
+                    settings = secret_settings(self._data, user_input)
+                    result = await self._client.login(company, username, password, force=True)
+                except InvalidTotp:
+                    errors["base"] = "invalid_totp"
                 except WorkerError as err:
                     errors["base"] = err.code
                 else:
+                    self._data = settings
                     self._data.update(
                         {
                             CONF_COMPANY: company,
@@ -181,7 +204,9 @@ class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
                         }
                     )
                     if result.get("mfa_required"):
-                        return await self.async_step_mfa()
+                        return await self.async_step_mfa(
+                            {} if self._data.get(CONF_TOTP_URI) else None
+                        )
                     return await self._finish()
         return self.async_show_form(
             step_id="account",
@@ -193,14 +218,17 @@ class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
         errors = {}
         if user_input is not None:
             try:
-                await self._client.mfa(user_input[CONF_CODE])
+                settings = await complete_mfa(self._client, self._data, user_input)
+            except InvalidTotp:
+                errors["base"] = "invalid_totp"
             except WorkerError as err:
                 errors["base"] = err.code
             else:
+                self._data = settings
                 return await self._finish()
         return self.async_show_form(
             step_id="mfa",
-            data_schema=vol.Schema({vol.Required(CONF_CODE): PASSWORD}),
+            data_schema=mfa_schema(),
             errors=errors,
         )
 
@@ -209,7 +237,31 @@ class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
         await self._client.close()
         await self.async_set_unique_id(self._data[CONF_PROFILE])
         if self._entry:
-            self._abort_if_unique_id_mismatch()
+            if self.source == "reconfigure":
+                for other in self.hass.config_entries.async_entries(DOMAIN):
+                    if other.entry_id != self._entry.entry_id and other.unique_id == self.unique_id:
+                        return self.async_abort(reason="already_configured")
+                old = self._entry.data[CONF_PROFILE]
+                new = self._data[CONF_PROFILE]
+                if old != new:
+                    # Preserve names, history and automations when switching employee login.
+                    registry = er.async_get(self.hass)
+                    for entity in er.async_entries_for_config_entry(registry, self._entry.entry_id):
+                        if entity.unique_id.startswith(old + "_"):
+                            registry.async_update_entity(
+                                entity.entity_id, new_unique_id=new + entity.unique_id[len(old) :]
+                            )
+                    devices = dr.async_get(self.hass)
+                    for device in dr.async_entries_for_config_entry(devices, self._entry.entry_id):
+                        if (DOMAIN, old) in device.identifiers:
+                            devices.async_update_device(
+                                device.id,
+                                new_identifiers=(device.identifiers - {(DOMAIN, old)})
+                                | {(DOMAIN, new)},
+                            )
+                    self.hass.config_entries.async_update_entry(self._entry, unique_id=new)
+            else:
+                self._abort_if_unique_id_mismatch()
             return self.async_update_reload_and_abort(
                 self._entry, data=self._data, title=self._title
             )

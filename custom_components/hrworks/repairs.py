@@ -4,18 +4,20 @@ import voluptuous as vol
 from homeassistant.components.repairs import RepairsFlow
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.helpers import issue_registry as ir
-from homeassistant.helpers.selector import TextSelector, TextSelectorConfig, TextSelectorType
 
 from .api import WorkerClient, WorkerError
-from .const import CONF_CODE, CONF_COMPANY, DOMAIN
+from .auth import complete_mfa, secret_settings
+from .config_flow import account_schema, mfa_schema
+from .const import CONF_COMPANY, CONF_TOTP_URI, DOMAIN
 from .coordinator import clear_issues
+from .totp import InvalidTotp
 
 
 class EmployeeLoginRepair(RepairsFlow):
     def __init__(self, entry_id: str) -> None:
         self.entry_id = entry_id
         self.client = None
-        self.password = None
+        self.settings = {}
 
     async def async_step_init(self, user_input=None):
         return await self.async_step_login(user_input)
@@ -31,27 +33,30 @@ class EmployeeLoginRepair(RepairsFlow):
             self.client = WorkerClient(self.hass, entry.data)
             password = user_input.get(CONF_PASSWORD) or entry.data[CONF_PASSWORD]
             try:
+                settings = secret_settings(entry.data, user_input)
                 result = await self.client.login(
-                    entry.data[CONF_COMPANY], entry.data[CONF_USERNAME], password
+                    entry.data[CONF_COMPANY], entry.data[CONF_USERNAME], password, force=True
                 )
+            except InvalidTotp:
+                errors["base"] = "invalid_totp"
             except WorkerError as err:
                 errors["base"] = err.code
             else:
                 # Never change the employee identity as part of a repair.
                 if result["profile_id"] != entry.unique_id:
                     return self.async_abort(reason="different_account")
-                self.password = password
+                self.settings = settings
                 if result.get("mfa_required"):
-                    return await self.async_step_mfa()
+                    return await self.async_step_mfa({} if settings.get(CONF_TOTP_URI) else None)
                 return await self._finish(entry)
         return self.async_show_form(
             step_id="login",
             errors=errors,
             data_schema=vol.Schema(
                 {
-                    vol.Optional(CONF_PASSWORD): TextSelector(
-                        TextSelectorConfig(type=TextSelectorType.PASSWORD)
-                    )
+                    key: value
+                    for key, value in account_schema(entry.data, existing=True).schema.items()
+                    if str(key) not in {CONF_COMPANY, CONF_USERNAME}
                 }
             ),
         )
@@ -63,29 +68,24 @@ class EmployeeLoginRepair(RepairsFlow):
             return self.async_abort(reason="entry_removed")
         if user_input is not None:
             try:
-                await self.client.mfa(user_input[CONF_CODE])
+                settings = await complete_mfa(self.client, self.settings, user_input)
+            except InvalidTotp:
+                errors["base"] = "invalid_totp"
             except WorkerError as err:
                 errors["base"] = err.code
             else:
+                self.settings = settings
                 return await self._finish(entry)
         return self.async_show_form(
             step_id="mfa",
             errors=errors,
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_CODE): TextSelector(
-                        TextSelectorConfig(type=TextSelectorType.PASSWORD)
-                    )
-                }
-            ),
+            data_schema=mfa_schema(),
         )
 
     async def _finish(self, entry):
         await self.client.close()
-        if self.password and self.password != entry.data[CONF_PASSWORD]:
-            self.hass.config_entries.async_update_entry(
-                entry, data={**entry.data, CONF_PASSWORD: self.password}
-            )
+        if self.settings != entry.data:
+            self.hass.config_entries.async_update_entry(entry, data=self.settings)
         clear_issues(self.hass, entry)
         # Abort the matching reauth flow so the Repairs and Integrations screens agree.
         for flow in self.hass.config_entries.flow.async_progress():

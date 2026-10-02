@@ -14,6 +14,7 @@ import os
 import re
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from urllib.parse import urljoin
 from zoneinfo import ZoneInfo
 
 from playwright.async_api import Browser, BrowserContext, Page
@@ -53,7 +54,7 @@ def dates(value: str) -> list[date]:
 
 
 def normalize(value: str) -> str:
-    return " ".join(value.split()).casefold()
+    return " ".join(value.replace("’", "'").split()).casefold().rstrip(":").strip()
 
 
 class EmployeePortal:
@@ -72,11 +73,11 @@ class EmployeePortal:
     def state_path(self) -> Path:
         return self.state_dir / f"{self.identity}.json"
 
-    async def open(self) -> Page:
+    async def open(self, *, fresh: bool = False) -> Page:
         if self.page is not None and not self.page.is_closed():
             return self.page
         self.context = await self.browser.new_context(
-            storage_state=str(self.state_path) if self.state_path.exists() else None,
+            storage_state=str(self.state_path) if self.state_path.exists() and not fresh else None,
             locale="en-GB",
             timezone_id="Europe/Berlin",
             viewport={"width": 1600, "height": 1000},
@@ -129,12 +130,16 @@ class EmployeePortal:
     async def navigate(self, route: str) -> Page:
         page = await self.open()
         target = f"/o/time-management/{route}"
-        link = page.locator(f'a[href="{target}"]:visible').first
+        link = page.locator(f'a[href$="{target}"]:visible').first
         if "/o/" in page.url and await link.count():
             await link.click()
         else:
             # Third-party scripts can delay DOMContentLoaded on this portal.
-            await page.goto(f"https://ssl6.hrworks.de{target}", wait_until="commit", timeout=45000)
+            await page.goto(
+                urljoin(page.url if "/o/" in page.url else LOGIN_URL, target),
+                wait_until="commit",
+                timeout=45000,
+            )
             await page.locator("body").wait_for(timeout=45000)
         if "login.hrworks.de" in page.url:
             raise PortalError("session_expired", 403)
@@ -144,8 +149,12 @@ class EmployeePortal:
             raise PortalError("session_expired", 403)
         return page
 
-    async def login(self, company: str, username: str, password: str) -> dict:
-        page = await self.open()
+    async def login(
+        self, company: str, username: str, password: str, *, force: bool = False
+    ) -> dict:
+        if force:
+            await self.close()
+        page = await self.open(fresh=force)
         await page.goto(LOGIN_URL, wait_until="domcontentloaded")
         if "/o/" in page.url:
             await self.settle()
@@ -178,7 +187,7 @@ class EmployeePortal:
 
     async def mfa(self, code: str) -> dict:
         if (
-            not re.fullmatch(r"\d{6}", code)
+            not re.fullmatch(r"[0-9]{6}", code)
             or self.mfa_started is None
             or datetime.now(BERLIN) - self.mfa_started > timedelta(minutes=10)
         ):
@@ -469,13 +478,15 @@ class EmployeePortal:
 
     async def editor_entries(self, holder) -> list[dict]:
         """Read the visible rows without changing the portal editor."""
-        fields = await holder.locator(".me-form-group").evaluate_all("""es=>es
-            .filter(e=>e.checkVisibility()).map(e=>({
-                label:e.querySelector('label')?.innerText,
-                value:e.querySelector('select')?.selectedOptions[0]?.text
-                    ?? e.querySelector('input,textarea')?.value
-                    ?? e.querySelector('.me-form-item-div')?.innerText
-            }))""")
+        fields = await holder.locator("label").evaluate_all("""labels => labels
+            .filter(label => label.checkVisibility() || label.closest('.me-form-group, .form-group')?.checkVisibility()).map(label => {
+                const group = label.closest('.me-form-group, .form-group');
+                const control = label.control || label.querySelector('input,select,textarea')
+                    || group?.querySelector('input,select,textarea');
+                return {label: label.innerText,
+                    value: control?.selectedOptions?.[0]?.text ?? control?.value
+                        ?? group?.querySelector('.me-form-item-div')?.innerText};
+            })""")
         pairs = [
             (normalize(f.get("label") or "").rstrip(":"), (f.get("value") or "").strip())
             for f in fields
@@ -495,6 +506,13 @@ class EmployeePortal:
                 current["comment"] = value
         if current:
             entries.append(current)
+        if any("end" not in entry or not entry.get("type") for entry in entries):
+            raise PortalError("portal_changed", 502)
+        if (
+            not entries
+            and await holder.locator("input:visible,select:visible,textarea:visible").count()
+        ):
+            raise PortalError("portal_changed", 502)
         return entries
 
     async def discard_row(self, start_field) -> None:

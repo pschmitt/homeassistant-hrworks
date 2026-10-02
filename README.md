@@ -81,7 +81,7 @@ browser user's state directory.
 
 ## Settings and repair
 
-- **Reconfigure:** change the SSH connection, device name or employee password.
+- **Reconfigure:** change the SSH connection, device name, company, username, password or TOTP URI. Blank secret fields keep the saved values; use **Remove saved TOTP URI** to clear it. Account changes preserve entity IDs and use a fresh login.
   A blank employee password keeps the existing value. Changing employees requires a new entry.
 - **Options:** update interval (5 minutes–1 day), calendar history and lookahead
   (up to two years each), pending leave, sickness visibility and time-entry permissions.
@@ -149,3 +149,29 @@ Employee sessions are preserved in the runtime state directory. HACS updates the
 This is an independently maintained custom integration. HR WORKS does not provide
 or support the browser protocol used here. Portal layout changes may require a
 worker update. This integration does not create leave or sickness requests.
+
+## Authentication and maintenance
+
+An optional `otpauth://totp/...` provisioning URI can be entered during account
+setup, Reconfigure, or an MFA challenge in Repairs. Use the URI behind your
+authenticator’s QR code. Six-digit SHA1, SHA256 and SHA512 TOTP URIs are accepted.
+The seed is stored alongside the employee password in Home Assistant, never
+prefilled into forms, included in diagnostics, or sent to the browser worker.
+Only the generated one-time code crosses SSH. Protect Home Assistant backups
+as you would your password manager.
+
+With a URI saved, an expired session gets one fresh login and one snapshot retry.
+Rejected codes open the normal authentication repair, with manual code entry
+available. Working-time submissions are never automatically replayed.
+
+The adapter discovers year/month options, follows navigation links, reads editor
+controls through their labels, and discovers working-time choices by displayed
+labels rather than option IDs. Label whitespace, trailing colons, typographic
+apostrophes and regenerated control IDs are tolerated. English and German labels
+are supported. Unknown meanings, ambiguous rows and changed structural containers
+fail visibly through Repairs rather than guessing or publishing fabricated data.
+
+Browser integration remains dependent on HR WORKS’ private portal layout. It
+cannot offer the stability of an official API. Synthetic browser fixtures cover
+editor layout variations; authentication and coordinator regression tests run
+against Home Assistant itself. All fixtures use invented data.

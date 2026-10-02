@@ -30,18 +30,21 @@
       },
       "account": {
         "title": "Dein Mitarbeiterkonto",
-        "description": "Verwende deine normale HR WORKS-Mitarbeiteranmeldung. Ein Firmen-API-Schlüssel ist nicht nötig. Bei der Neukonfiguration behält ein leeres Passwortfeld das bisherige Passwort.",
+        "description": "Verwende deinen Mitarbeiter-Login. In der Neukonfiguration können Firma, Benutzer und Passwort geändert werden. Leere Geheimnisfelder behalten den gespeicherten Wert. Die optionale otpauth://totp/...-URI ermöglicht automatische Authenticator-Codes.",
         "data": {
           "company_id": "Firmenkennung",
           "username": "Benutzerkennung",
-          "password": "Passwort"
+          "password": "Passwort",
+          "totp_uri": "TOTP-URI (optional)",
+          "clear_totp": "Gespeicherte TOTP-URI entfernen"
         }
       },
       "mfa": {
         "title": "Anmeldung bestätigen",
-        "description": "Gib den aktuellen sechsstelligen Code aus deinem Authenticator ein. Der Code wird einmalig verwendet und nicht gespeichert.",
+        "description": "Gib einen aktuellen sechsstelligen Code oder die otpauth://totp/...-URI deines Authenticators ein. Die URI wird für spätere Anmeldungen gespeichert; einzelne Codes werden nicht gespeichert.",
         "data": {
-          "code": "Authenticator-Code"
+          "code": "Authenticator-Code",
+          "totp_uri": "TOTP-URI (optional)"
         }
       }
     },
@@ -61,7 +64,8 @@
       "not_found": "Die Mitarbeitersitzung wurde nicht gefunden. Starte die Anmeldung erneut.",
       "invalid_request": "Der Worker hat die Anfrage abgelehnt. Aktualisiere Integration und Worker zusammen.",
       "unknown": "Ein unerwarteter Fehler ist aufgetreten.",
-      "ssh_host_key": "SSH-Hostschlüssel stimmt nicht mit dem bekannten Schlüssel überein. Host prüfen und Verbindung neu konfigurieren."
+      "ssh_host_key": "SSH-Hostschlüssel stimmt nicht mit dem bekannten Schlüssel überein. Host prüfen und Verbindung neu konfigurieren.",
+      "invalid_totp": "Ungültige TOTP-URI. Verwende otpauth://totp/... mit einem Base32-Geheimnis und sechs Stellen."
     },
     "abort": {
       "already_configured": "Dieses Mitarbeiterkonto ist bereits eingerichtet.",
@@ -162,14 +166,17 @@
             "title": "Erneut anmelden",
             "description": "Fahre mit der gespeicherten Mitarbeiteranmeldung fort. Gib nur dann ein neues Passwort ein, wenn es sich geändert hat.",
             "data": {
-              "password": "Passwort"
+              "password": "Passwort",
+              "totp_uri": "TOTP-URI (optional)",
+              "clear_totp": "Gespeicherte TOTP-URI entfernen"
             }
           },
           "mfa": {
             "title": "Anmeldung bestätigen",
-            "description": "Gib den aktuellen sechsstelligen Code aus deinem Authenticator ein. Der Code wird einmalig verwendet und nicht gespeichert.",
+            "description": "Gib einen aktuellen sechsstelligen Code oder die otpauth://totp/...-URI deines Authenticators ein. Die URI wird für spätere Anmeldungen gespeichert; einzelne Codes werden nicht gespeichert.",
             "data": {
-              "code": "Authenticator-Code"
+              "code": "Authenticator-Code",
+              "totp_uri": "TOTP-URI (optional)"
             }
           }
         },
@@ -189,7 +196,8 @@
           "not_found": "Die Mitarbeitersitzung wurde nicht gefunden. Starte die Anmeldung erneut.",
           "invalid_request": "Der Worker hat die Anfrage abgelehnt. Aktualisiere Integration und Worker zusammen.",
           "unknown": "Ein unerwarteter Fehler ist aufgetreten.",
-          "ssh_host_key": "SSH-Hostschlüssel stimmt nicht mit dem bekannten Schlüssel überein. Host prüfen und Verbindung neu konfigurieren."
+          "ssh_host_key": "SSH-Hostschlüssel stimmt nicht mit dem bekannten Schlüssel überein. Host prüfen und Verbindung neu konfigurieren.",
+          "invalid_totp": "Ungültige TOTP-URI. Verwende otpauth://totp/... mit einem Base32-Geheimnis und sechs Stellen."
         },
         "abort": {
           "entry_removed": "Der Integrationseintrag wurde entfernt.",

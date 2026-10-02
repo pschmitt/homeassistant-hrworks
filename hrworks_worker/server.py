@@ -66,7 +66,11 @@ class Worker:
     async def dispatch(self, path: str, data: dict | None) -> dict:
         if path == "health":
             await self.connect()
-            return {"protocol_version": PROTOCOL_VERSION, "writes_enabled": self.enable_writes}
+            return {
+                "protocol_version": PROTOCOL_VERSION,
+                "writes_enabled": self.enable_writes,
+                "capabilities": ["fresh_login"],
+            }
         if not isinstance(data, dict):
             raise PortalError("invalid_request")
         if path == "login":
@@ -75,11 +79,16 @@ class Worker:
                 for k in ("company_id", "username", "password")
             ):
                 raise PortalError("invalid_request")
+            if type(data.get("force", False)) is not bool:
+                raise PortalError("invalid_request")
             identity = profile_id(data["company_id"].strip(), data["username"].strip())
             portal = await self.portal(identity, create=True)
             async with portal.lock:
                 return await portal.login(
-                    data["company_id"].strip(), data["username"].strip(), data["password"]
+                    data["company_id"].strip(),
+                    data["username"].strip(),
+                    data["password"],
+                    force=data.get("force", False),
                 )
         match = re.fullmatch(r"profiles/([a-f0-9]{64})/(mfa|snapshot|record)", path)
         if not match:
