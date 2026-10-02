@@ -366,6 +366,8 @@ def times_list(
 
     data = rt.run(operation)
     rows = [{"date": item["date"], **entry} for item in data for entry in item["entries"]]
+    if not rows:
+        rows = [{"date": month or days[0].isoformat(), "status": "No working-time entries"}]
     rt.output(data, rows)
 
 

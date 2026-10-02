@@ -44,6 +44,8 @@ for line in sys.stdin:
                 }
             ],
         }
+        if os.environ.get("HRWORKS_TEST_EMPTY_DAY"):
+            result["entries"] = []
     elif path.endswith("/snapshot"):
         result = {
             "metrics": {"today_worked": 480, "today_target": 480, "today_balance": 0},

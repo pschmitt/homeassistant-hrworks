@@ -280,3 +280,12 @@ class CliTests(unittest.TestCase):
         self.assertEqual(body["saved_count"], 1)
         self.assertEqual(body["failed_index"], 1)
         self.assertEqual(len(body["results"]), 1)
+
+    def test_empty_day_names_the_requested_date(self):
+        self.env["HRWORKS_TEST_EMPTY_DAY"] = "1"
+        result = self.cli("times", "list", "--date", "2026-09-01")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("2026-09-01", result.stdout)
+        self.assertIn("No working-time entries", result.stdout)
+        result = self.cli("times", "list", "--date", "2026-09-01", "--json")
+        self.assertEqual(json.loads(result.stdout)[0]["entries"], [])

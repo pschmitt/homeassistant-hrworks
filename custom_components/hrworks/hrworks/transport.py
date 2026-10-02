@@ -126,7 +126,7 @@ class SshTransport(Transport):
                 self.settings["ssh_host"],
                 port=int(self.settings.get("ssh_port", 22)),
                 username=self.settings.get("ssh_username"),
-                client_keys=[key] if key else None,
+                client_keys=[key] if key else (),
                 known_hosts=known_hosts,
                 agent_path=None if key else (),
                 connect_timeout=15,

@@ -2,9 +2,9 @@
 
 import asyncio
 import unittest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from hrworks.transport import Transport, WorkerError
+from hrworks.transport import SshTransport, Transport, WorkerError
 from playwright.async_api import TimeoutError as PlaywrightTimeout
 
 from hrworks_worker.portal import EmployeePortal, PortalError
@@ -94,3 +94,22 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(PortalError) as error:
             await EmployeePortal.navigate(portal, "working-times")
         self.assertEqual(error.exception.code, "session_expired")
+
+    async def test_optional_ssh_key_keeps_default_key_and_agent_discovery(self):
+        for settings, expected in [
+            ({"ssh_host": "synthetic"}, ()),
+            ({"ssh_host": "synthetic", "ssh_key_path": "/synthetic/key"}, ["/synthetic/key"]),
+        ]:
+            connection = MagicMock()
+            connection.create_process = AsyncMock(return_value=MagicMock())
+            connection.wait_closed = AsyncMock()
+            transport = SshTransport(settings)
+            with patch(
+                "hrworks.transport.asyncssh.connect", AsyncMock(return_value=connection)
+            ) as connect:
+                await transport.connect()
+                self.assertEqual(connect.call_args.kwargs["client_keys"], expected)
+                self.assertEqual(
+                    connect.call_args.kwargs["agent_path"], () if expected == () else None
+                )
+            await transport.close()
