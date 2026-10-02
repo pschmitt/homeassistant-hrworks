@@ -342,14 +342,19 @@ def auth_status(ctx: typer.Context):
 @times_app.command("list")
 def times_list(
     ctx: typer.Context,
-    day: Annotated[str | None, typer.Option("--date", help="ISO day; defaults to today.")] = None,
+    day: Annotated[
+        str | None,
+        typer.Option("--date", help="ISO day; overrides the default current-month view."),
+    ] = None,
     month: Annotated[str | None, typer.Option(help="Read every day of YYYY-MM.")] = None,
 ):
-    """List separate working-time intervals, including open intervals."""
+    """List this month's separate intervals, including open intervals."""
     rt = runtime(ctx)
     if day and month:
         raise WorkerError("invalid_range")
     try:
+        if day is None and month is None:
+            month = date.today().strftime("%Y-%m")
         if month:
             year, number = map(int, month.split("-"))
             days = [

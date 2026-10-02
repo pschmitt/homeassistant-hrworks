@@ -1,5 +1,6 @@
 """Subprocess tests prove stdout, exit codes and the installed entry point."""
 
+import calendar
 import csv
 import io
 import json
@@ -8,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
@@ -289,3 +291,12 @@ class CliTests(unittest.TestCase):
         self.assertIn("No working-time entries", result.stdout)
         result = self.cli("times", "list", "--date", "2026-09-01", "--json")
         self.assertEqual(json.loads(result.stdout)[0]["entries"], [])
+
+    def test_times_list_defaults_to_current_month(self):
+        result = self.cli("times", "list", "--json")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        days = json.loads(result.stdout)
+        today = date.today()
+        self.assertEqual(len(days), calendar.monthrange(today.year, today.month)[1])
+        self.assertEqual(days[0]["date"], today.replace(day=1).isoformat())
+        self.assertTrue(all(day["date"].startswith(today.strftime("%Y-%m")) for day in days))

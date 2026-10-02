@@ -72,6 +72,7 @@ JSON metrics retain numeric minutes. `--non-interactive` disables prompts.
 ```bash
 hrworks balance
 hrworks balance --json
+hrworks times list                 # Current month
 hrworks times list --date 2026-09-01 | tsvtool pretty
 hrworks calendar list --kind leave --json
 ```
@@ -213,3 +214,5 @@ The `#worker` package/app runs `hrworks-worker` directly.
 Installations are declarative; employee secrets and browser sessions stay in
 private runtime storage. A workstation can use `config init --transport ssh`
 to connect to an existing worker without running Chromium locally.
+
+`times list` defaults to the current month; use `--date` for one day or `--month YYYY-MM` for another month.
