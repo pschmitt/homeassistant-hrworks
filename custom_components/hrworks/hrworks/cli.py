@@ -367,7 +367,9 @@ def times_list(
         raise WorkerError("invalid_range") from None
 
     async def operation(client):
-        return [await client.day(value.isoformat()) for value in days]
+        return [
+            await client.day(value.isoformat(), reuse=index > 0) for index, value in enumerate(days)
+        ]
 
     data = rt.run(operation)
     rows = [{"date": item["date"], **entry} for item in data for entry in item["entries"]]

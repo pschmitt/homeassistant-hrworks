@@ -14,7 +14,7 @@ import os
 import re
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 from zoneinfo import ZoneInfo
 
 from hrworks.models import TYPE_LABELS
@@ -128,11 +128,13 @@ class EmployeePortal:
                 return
         raise PortalError("portal_changed", 502)
 
-    async def navigate(self, route: str) -> Page:
+    async def navigate(self, route: str, *, reuse: bool = False) -> Page:
         page = await self.open()
         target = f"/o/time-management/{route}"
         link = page.locator(f'a[href$="{target}"]:visible').first
-        if "/o/" in page.url and await link.count():
+        if reuse and urlsplit(page.url).path.endswith(target):
+            pass
+        elif "/o/" in page.url and await link.count():
             await link.click()
         else:
             # Third-party scripts can delay DOMContentLoaded on this portal.
@@ -406,17 +408,18 @@ class EmployeePortal:
                     vacation[key] = float(match[1].replace(",", "."))
         return events, vacation
 
-    async def working_day(self, day: date) -> tuple[dict, list[dict]]:
+    async def working_day(self, day: date, *, reuse: bool = False) -> tuple[dict, list[dict]]:
         """Read actual day entries; keep every split interval separate."""
-        page = await self.navigate("working-times")
+        page = await self.navigate("working-times", reuse=reuse)
         if not await self.select_year(day.year):
             return {}, []
         selects = page.locator("select:visible")
         for select in await selects.all():
             labels = await select.locator("option").all_text_contents()
             if len(labels) == 12:
-                await select.select_option(index=day.month - 1)
-                await self.settle()
+                if await select.evaluate("e => e.selectedIndex") != day.month - 1:
+                    await select.select_option(index=day.month - 1)
+                    await self.settle()
                 break
         for tab in await page.locator(".m-accordion__item-head").all():
             title = await tab.locator(".m-accordion__item-title").inner_text()

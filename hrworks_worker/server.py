@@ -114,7 +114,9 @@ class Worker:
                         day = date.fromisoformat(data["date"])
                     except (KeyError, TypeError, ValueError):
                         raise PortalError("invalid_request") from None
-                    metrics, entries = await portal.working_day(day)
+                    if type(data.get("reuse", False)) is not bool:
+                        raise PortalError("invalid_request")
+                    metrics, entries = await portal.working_day(day, reuse=data.get("reuse", False))
                     return {"date": day.isoformat(), "metrics": metrics, "entries": entries}
                 case "account":
                     metrics, account = await portal.account(datetime.now(BERLIN).date())

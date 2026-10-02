@@ -113,3 +113,19 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
                     connect.call_args.kwargs["agent_path"], () if expected == () else None
                 )
             await transport.close()
+
+    async def test_month_reads_reuse_only_the_requested_portal_route(self):
+        page = MagicMock()
+        page.url = "https://ssl6.hrworks.de/o/time-management/working-times"
+        page.goto = AsyncMock()
+        page.locator.return_value.first.wait_for = AsyncMock()
+        page.locator.return_value.first.count = AsyncMock(return_value=1)
+        page.locator.return_value.first.click = AsyncMock()
+        portal = MagicMock()
+        portal.open = AsyncMock(return_value=page)
+        portal.settle = AsyncMock()
+        await EmployeePortal.navigate(portal, "working-times", reuse=True)
+        page.goto.assert_not_awaited()
+        page.locator.return_value.first.click.assert_not_awaited()
+        await EmployeePortal.navigate(portal, "working-time-months", reuse=True)
+        page.locator.return_value.first.click.assert_awaited_once()

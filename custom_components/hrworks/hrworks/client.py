@@ -75,10 +75,10 @@ class WorkerClient:
     async def record(self, data: dict) -> dict:
         return await self.request(self._path("record"), data)
 
-    async def day(self, day: str) -> dict:
+    async def day(self, day: str, *, reuse: bool = False) -> dict:
         path = self._path("day")
         await self._require_feature("day")
-        return await self.request(path, {"date": day})
+        return await self.request(path, {"date": day, "reuse": reuse})
 
     async def logout(self) -> dict:
         if not self.profile:
