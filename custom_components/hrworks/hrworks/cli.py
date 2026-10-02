@@ -352,14 +352,19 @@ def times_list(
     rt = runtime(ctx)
     if day and month:
         raise WorkerError("invalid_range")
+    current_month = day is None and month is None
     try:
-        if day is None and month is None:
+        if current_month:
             month = date.today().strftime("%Y-%m")
         if month:
             year, number = map(int, month.split("-"))
             days = [
                 date(year, number, index)
-                for index in range(1, calendar.monthrange(year, number)[1] + 1)
+                for index in range(
+                    1,
+                    (date.today().day if current_month else calendar.monthrange(year, number)[1])
+                    + 1,
+                )
             ]
         else:
             days = [date.fromisoformat(day) if day else date.today()]

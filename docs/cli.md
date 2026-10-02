@@ -215,4 +215,4 @@ Installations are declarative; employee secrets and browser sessions stay in
 private runtime storage. A workstation can use `config init --transport ssh`
 to connect to an existing worker without running Chromium locally.
 
-`times list` defaults to the current month; use `--date` for one day or `--month YYYY-MM` for another month.
+`times list` defaults to the current month through today, skipping empty future days. Use `--date` for one day or `--month YYYY-MM` to read a complete month.

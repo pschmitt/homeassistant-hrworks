@@ -1,6 +1,5 @@
 """Subprocess tests prove stdout, exit codes and the installed entry point."""
 
-import calendar
 import csv
 import io
 import json
@@ -297,6 +296,6 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout)
         days = json.loads(result.stdout)
         today = date.today()
-        self.assertEqual(len(days), calendar.monthrange(today.year, today.month)[1])
+        self.assertEqual(len(days), today.day)
         self.assertEqual(days[0]["date"], today.replace(day=1).isoformat())
         self.assertTrue(all(day["date"].startswith(today.strftime("%Y-%m")) for day in days))
