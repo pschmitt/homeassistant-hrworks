@@ -81,6 +81,7 @@ class EmployeePortal:
             timezone_id="Europe/Berlin",
             viewport={"width": 1600, "height": 1000},
             accept_downloads=False,
+            service_workers="block",
         )
         self.page = await self.context.new_page()
         self.page.set_default_timeout(20000)
