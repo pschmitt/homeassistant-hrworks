@@ -43,6 +43,10 @@ class WorkerClient:
         self._remove_stop = None
 
     async def close(self, _event=None) -> None:
+        remove_stop = self._remove_stop
+        self._remove_stop = None
+        if remove_stop and _event is None:
+            remove_stop()
         if self.process:
             self.process.close()
             self.process = None
@@ -54,9 +58,6 @@ class WorkerClient:
             except (TimeoutError, OSError, asyncssh.Error):
                 pass
             self.connection = None
-        if self._remove_stop:
-            self._remove_stop()
-            self._remove_stop = None
 
     async def _connect(self) -> None:
         if (
