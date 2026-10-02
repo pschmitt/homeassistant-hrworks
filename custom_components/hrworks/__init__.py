@@ -1,0 +1,43 @@
+"""Native Home Assistant entities for HR WORKS employee accounts."""
+
+from __future__ import annotations
+
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+
+from .api import WorkerClient
+from .const import PLATFORMS
+from .coordinator import HrworksCoordinator, clear_issues
+from .services import register_services
+
+type HrworksConfigEntry = ConfigEntry[HrworksCoordinator]
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: HrworksConfigEntry) -> bool:
+    client = WorkerClient(hass, entry.data)
+    coordinator = HrworksCoordinator(hass, entry, client)
+    try:
+        await coordinator.async_config_entry_first_refresh()
+    except Exception:
+        await client.close()
+        raise
+    entry.runtime_data = coordinator
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    entry.async_on_unload(entry.add_update_listener(_reload))
+    register_services(hass)
+    return True
+
+
+async def _reload(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: HrworksConfigEntry) -> bool:
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unloaded:
+        await entry.runtime_data.client.close()
+    return unloaded
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    clear_issues(hass, entry, include_writes=True)

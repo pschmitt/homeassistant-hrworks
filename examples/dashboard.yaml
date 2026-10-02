@@ -1,0 +1,54 @@
+title: Work
+views:
+  - title: Work
+    path: work
+    icon: mdi:briefcase-clock-outline
+    type: sections
+    max_columns: 2
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Time account
+            icon: mdi:timer-sand
+          - type: tile
+            entity: sensor.hr_works_total_balance
+            color: teal
+            vertical: false
+          - type: tile
+            entity: sensor.hr_works_monthly_balance
+            color: amber
+          - type: tile
+            entity: sensor.hr_works_monthly_worked_time
+          - type: tile
+            entity: sensor.hr_works_monthly_target_time
+          - type: history-graph
+            title: Balance over time
+            hours_to_show: 168
+            entities:
+              - sensor.hr_works_total_balance
+              - sensor.hr_works_monthly_balance
+            grid_options:
+              columns: full
+          - type: tile
+            entity: binary_sensor.hr_works_clocked_in
+          - type: tile
+            entity: button.hr_works_refresh
+      - type: grid
+        cards:
+          - type: heading
+            heading: Time off
+            icon: mdi:calendar-heart
+          - type: tile
+            entity: sensor.hr_works_vacation_remaining
+            color: green
+          - type: tile
+            entity: binary_sensor.hr_works_on_leave
+            color: blue
+          - type: calendar
+            initial_view: listWeek
+            entities:
+              - calendar.hr_works_leave
+              - calendar.hr_works_sickness
+            grid_options:
+              columns: full

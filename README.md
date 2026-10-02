@@ -1,0 +1,151 @@
+# HR WORKS for Home Assistant
+
+Your working-time balance and leave calendar, alongside the rest of your home.
+Uses your **regular employee login and authenticator**. No company API key is needed.
+
+## What you get
+
+| Entities | Details |
+| --- | --- |
+| Time account | Worked and target hours, monthly balance, carryover and total balance |
+| Daily time | Credited work, target and balance where the portal exposes them |
+| Vacation | Available and approved days |
+| Calendars | Leave and sickness, with approval status and half-day annotations |
+| Status | Clocked in, on leave and on sick leave |
+| Controls | Refresh button and a working-time action with a preview mode |
+
+One service device per employee. English and German translations. Numeric hours for
+graphs and calculations, with a readable `formatted` attribute such as `-1:30`.
+Different employees can have their own entries, worker sessions and settings.
+
+## How it works
+
+```mermaid
+flowchart LR
+    HA[Home Assistant] -->|SSH · JSON requests| Worker[Nix-packaged browser process]
+    Worker -->|Local CDP| Chromium[Chromium on browser host]
+    Chromium -->|Employee login and MFA| HR[HR WORKS]
+```
+
+Home Assistant starts the browser process through `asyncssh`, using the same remote
+command pattern as our Monero Pool integration. Requests and responses travel through
+SSH stdin/stdout. Playwright and its driver run on the browser host; HA installs only
+AsyncSSH. The worker creates isolated Chromium contexts and saves each employee's
+cookies in a private state directory. It disconnects without closing other browser tabs.
+
+## Declarative installation on NixOS
+
+Add a pinned flake input and import its NixOS module:
+
+```nix
+# flake.nix inputs
+hrworks = {
+  url = "github:pschmitt/homeassistant-hrworks";
+  inputs.nixpkgs.follows = "nixpkgs";
+};
+```
+
+```nix
+# Browser host module (inputs supplied through specialArgs)
+{ inputs, ... }:
+{
+  imports = [ inputs.hrworks.nixosModules.default ];
+  programs.hrworksWorker = {
+    enable = true;
+    cdpUrl = "http://127.0.0.1:9222";
+    enableWrites = false;
+  };
+}
+```
+
+Commit `flake.lock` and deploy through your normal NixOS deployment workflow.
+The module installs the executable with its Python and Playwright dependencies in
+the Nix store. SSH starts the process on demand; it exits when the connection closes.
+Chromium and SSH must already be configured on the browser host. The worker uses
+`~/.local/state/hrworks-worker` under the SSH user by default; `stateDirectory`
+can override it. Login cookies are runtime state and never go into the Nix store.
+
+1. Add this repository as an **Integration** repository in HACS, or install
+   `custom_components/hrworks` using your existing submodule and symlink workflow.
+2. Restart HA and add **HR WORKS** under Settings → Devices & services.
+3. Enter the SSH host, port and username, the key file path **inside HA**, and a
+   verified `known_hosts` entry. The remote executable defaults to `hrworks-worker`;
+   an absolute executable path is also supported.
+4. Enter your employee company ID, user ID and password, then an authenticator code
+   if requested. One-time codes are never stored.
+
+Keep SSH private keys in runtime secret files (for example SOPS-managed files),
+never in a flake or Nix string. The existing HA SSH key can be reused where authorized.
+Employee passwords are stored in HA's config entry. Protect HA backups and the
+browser user's state directory.
+
+## Settings and repair
+
+- **Reconfigure:** change the SSH connection, device name or employee password.
+  A blank employee password keeps the existing value. Changing employees requires a new entry.
+- **Options:** update interval (5 minutes–1 day), calendar history and lookahead
+  (up to two years each), pending leave, sickness visibility and time-entry permissions.
+- **Repairs:** expired employee sessions can be repaired with the saved login and a
+  fresh authenticator code. Worker failures and portal changes have specific guidance.
+- **Diagnostics:** contain metric names, counts and operational status; exclude
+  credentials, company/user IDs, SSH addresses and host keys, event details and HR values.
+
+The refresh button also retries after a worker outage. Successful updates clear the
+relevant repairs. A calendar only covers the configured window; its `coverage`
+attribute gives the exact bounds. Cancelled or rejected leave is never treated as
+approved absence.
+
+## Reporting periods
+
+HR WORKS may expose the newest available month before it creates an account for
+the current month. Every time-account sensor includes `period`, `current_month`
+and `balance_basis`. The latest previous month is labelled as such, never silently
+presented as the current month.
+
+Balances come from the detailed account, including leave deductions and corrections.
+The current month's “to the previous day” balance takes precedence when exposed.
+Missing or unparseable values are **unavailable**, never synthesized as zero.
+
+Half-day leave stays an all-day calendar entry with a half-day description. No artificial clock times are invented for an absence.
+
+## Enter working times
+
+`hrworks.record_working_time` handles **one completed interval**. Include an explicit
+timezone offset, and send separate calls for morning and afternoon work.
+
+```yaml
+action: hrworks.record_working_time
+data:
+  start: "2026-10-02T08:30:00+02:00"
+  end: "2026-10-02T12:00:00+02:00"
+  type: workingTime
+  comment: "Morning work"
+  dry_run: true
+response_variable: preview
+```
+
+Previews validate the interval and inspect existing entries without adding an entry.
+To save, enable time entry in the integration options **and** set `programs.hrworksWorker.enableWrites = true` on the browser host, then explicitly set `dry_run: false`. Writes are disabled by default.
+The action refuses incomplete, future, overlapping, or cross-midnight intervals.
+Use minute precision: seconds are rejected rather than silently rounded.
+Supported types include ordinary work, doctor appointments, business errands and training.
+Available types and edit permissions still depend on your employer's portal configuration.
+
+A successful save is checked by reopening the day. An uncertain result raises a
+repair; check HR WORKS before resubmitting. Neither the worker nor HA automatically
+retries a write after a timeout. No historical gaps are automatically filled.
+
+## Dashboard
+
+An example using native tiles, a balance graph and calendars is in
+[`examples/dashboard.yaml`](examples/dashboard.yaml). Adjust entity IDs to your device name.
+The dashboard needs no custom frontend cards.
+
+## Updating
+
+Update the integration and worker together. Update the pinned flake input and deploy the resulting NixOS configuration.
+Employee sessions are preserved in the runtime state directory. HACS updates the HA portion only.
+
+This is an independently maintained custom integration. HR WORKS does not provide
+or support the browser protocol used here. Portal layout changes may require a
+worker update. This integration does not create leave or sickness requests.

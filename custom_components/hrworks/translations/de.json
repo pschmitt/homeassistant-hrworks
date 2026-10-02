@@ -1,0 +1,271 @@
+{
+  "title": "HR WORKS",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Browser über SSH verbinden",
+        "description": "Der Worker läuft auf dem SSH-Host und verbindet sich dort mit Chromium. Ein geprüfter Hostschlüssel und eine Schlüsseldatei in Home Assistant sind erforderlich. Die Mitarbeiteranmeldung folgt im nächsten Schritt.",
+        "data": {
+          "ssh_host": "SSH-Host",
+          "ssh_port": "SSH-Port",
+          "ssh_username": "SSH-Benutzername",
+          "ssh_key_path": "SSH-Schlüsseldatei in Home Assistant",
+          "ssh_known_hosts": "SSH-known_hosts-Eintrag",
+          "worker_command": "Worker-Programm auf dem SSH-Host",
+          "name": "Gerätename"
+        }
+      },
+      "reconfigure": {
+        "title": "Browser über SSH verbinden",
+        "description": "Der Worker läuft auf dem SSH-Host und verbindet sich dort mit Chromium. Ein geprüfter Hostschlüssel und eine Schlüsseldatei in Home Assistant sind erforderlich. Die Mitarbeiteranmeldung folgt im nächsten Schritt.",
+        "data": {
+          "ssh_host": "SSH-Host",
+          "ssh_port": "SSH-Port",
+          "ssh_username": "SSH-Benutzername",
+          "ssh_key_path": "SSH-Schlüsseldatei in Home Assistant",
+          "ssh_known_hosts": "SSH-known_hosts-Eintrag",
+          "worker_command": "Worker-Programm auf dem SSH-Host",
+          "name": "Gerätename"
+        }
+      },
+      "account": {
+        "title": "Dein Mitarbeiterkonto",
+        "description": "Verwende deine normale HR WORKS-Mitarbeiteranmeldung. Ein Firmen-API-Schlüssel ist nicht nötig. Bei der Neukonfiguration behält ein leeres Passwortfeld das bisherige Passwort.",
+        "data": {
+          "company_id": "Firmenkennung",
+          "username": "Benutzerkennung",
+          "password": "Passwort"
+        }
+      },
+      "mfa": {
+        "title": "Anmeldung bestätigen",
+        "description": "Gib den aktuellen sechsstelligen Code aus deinem Authenticator ein. Der Code wird einmalig verwendet und nicht gespeichert.",
+        "data": {
+          "code": "Authenticator-Code"
+        }
+      }
+    },
+    "error": {
+      "worker_auth": "SSH-Anmeldung fehlgeschlagen. Benutzer und Schlüsseldatei prüfen.",
+      "cannot_connect": "SSH-Host oder Worker nicht erreichbar. SSH-Verbindung und Nix-Paket prüfen.",
+      "browser_unavailable": "Der Worker erreicht seinen Browser nicht. Prüfe den Browser-Dienst.",
+      "incompatible_worker": "Das Worker-Protokoll ist inkompatibel. Aktualisiere Integration und Worker zusammen.",
+      "invalid_auth": "Die Anmeldung ist fehlgeschlagen. Prüfe Firmenkennung, Benutzerkennung und Passwort.",
+      "invalid_code": "Der Authenticator-Code wurde abgelehnt oder die Anmeldung ist abgelaufen. Versuche einen neuen Code oder starte die Anmeldung erneut.",
+      "unsupported_mfa": "Diese Anmeldung benötigt einen nicht unterstützten zweiten Faktor oder eine interaktive Bestätigung. Verwende eine Mitarbeiteranmeldung mit Authenticator.",
+      "session_expired": "Die Mitarbeitersitzung ist abgelaufen. Melde dich erneut an.",
+      "mfa_required": "Gib einen aktuellen Authenticator-Code ein.",
+      "different_account": "Dieser Eintrag gehört zu einem anderen Mitarbeiter. Füge für ein anderes Konto einen neuen Integrationseintrag hinzu.",
+      "portal_changed": "Das Portal konnte nicht zuverlässig gelesen werden. Prüfe Änderungen am Portal und aktualisiere den Worker.",
+      "busy": "Der Browser-Worker ist beschäftigt. Versuche es gleich erneut.",
+      "not_found": "Die Mitarbeitersitzung wurde nicht gefunden. Starte die Anmeldung erneut.",
+      "invalid_request": "Der Worker hat die Anfrage abgelehnt. Aktualisiere Integration und Worker zusammen.",
+      "unknown": "Ein unerwarteter Fehler ist aufgetreten.",
+      "ssh_host_key": "SSH-Hostschlüssel stimmt nicht mit dem bekannten Schlüssel überein. Host prüfen und Verbindung neu konfigurieren."
+    },
+    "abort": {
+      "already_configured": "Dieses Mitarbeiterkonto ist bereits eingerichtet.",
+      "reauth_successful": "Anmeldung abgeschlossen.",
+      "reconfigure_successful": "Konfiguration aktualisiert.",
+      "unique_id_mismatch": "Dieser Eintrag gehört zu einem anderen Mitarbeiter. Füge für ein anderes Konto einen neuen Integrationseintrag hinzu."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Einstellungen für Mitarbeiterdaten",
+        "description": "Wähle Kalenderzeitraum und Aktualisierungsintervall. Arbeitszeiteinträge müssen hier und beim Worker erlaubt sein. Vorschauen sind immer verfügbar.",
+        "data": {
+          "scan_interval": "Aktualisierungsintervall (Sekunden)",
+          "calendar_past_days": "Kalenderhistorie (Tage)",
+          "calendar_future_days": "Kalendervorschau (Tage)",
+          "include_sickness": "Krankheitskalender einbeziehen",
+          "include_pending": "Noch nicht genehmigte Abwesenheiten einbeziehen",
+          "enable_time_entry": "Arbeitszeiteinträge erlauben"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "monthly_worked": {
+        "name": "Monatliche Arbeitszeit"
+      },
+      "monthly_target": {
+        "name": "Monatliche Sollzeit"
+      },
+      "monthly_balance": {
+        "name": "Monatssaldo"
+      },
+      "carryover": {
+        "name": "Übertrag"
+      },
+      "total_balance": {
+        "name": "Gesamtsaldo"
+      },
+      "absence_deduction": {
+        "name": "Abwesenheitsabzüge"
+      },
+      "time_credit": {
+        "name": "Zeitgutschrift"
+      },
+      "today_worked": {
+        "name": "Heutige Arbeitszeit"
+      },
+      "today_target": {
+        "name": "Heutige Sollzeit"
+      },
+      "today_balance": {
+        "name": "Heutiger Saldo"
+      },
+      "vacation_remaining": {
+        "name": "Resturlaub"
+      },
+      "vacation_approved": {
+        "name": "Genehmigter Urlaub"
+      },
+      "last_updated": {
+        "name": "Zuletzt aktualisiert"
+      }
+    },
+    "binary_sensor": {
+      "clocked_in": {
+        "name": "Eingestempelt"
+      },
+      "on_leave": {
+        "name": "Abwesend"
+      },
+      "on_sick_leave": {
+        "name": "Krankgemeldet"
+      }
+    },
+    "calendar": {
+      "leave": {
+        "name": "Abwesenheiten"
+      },
+      "sickness": {
+        "name": "Krankmeldungen"
+      }
+    },
+    "button": {
+      "refresh": {
+        "name": "Aktualisieren"
+      }
+    }
+  },
+  "issues": {
+    "session_expired": {
+      "title": "Mitarbeiteranmeldung erforderlich",
+      "fix_flow": {
+        "step": {
+          "login": {
+            "title": "Erneut anmelden",
+            "description": "Fahre mit der gespeicherten Mitarbeiteranmeldung fort. Gib nur dann ein neues Passwort ein, wenn es sich geändert hat.",
+            "data": {
+              "password": "Passwort"
+            }
+          },
+          "mfa": {
+            "title": "Anmeldung bestätigen",
+            "description": "Gib den aktuellen sechsstelligen Code aus deinem Authenticator ein. Der Code wird einmalig verwendet und nicht gespeichert.",
+            "data": {
+              "code": "Authenticator-Code"
+            }
+          }
+        },
+        "error": {
+          "worker_auth": "SSH-Anmeldung fehlgeschlagen. Benutzer und Schlüsseldatei prüfen.",
+          "cannot_connect": "SSH-Host oder Worker nicht erreichbar. SSH-Verbindung und Nix-Paket prüfen.",
+          "browser_unavailable": "Der Worker erreicht seinen Browser nicht. Prüfe den Browser-Dienst.",
+          "incompatible_worker": "Das Worker-Protokoll ist inkompatibel. Aktualisiere Integration und Worker zusammen.",
+          "invalid_auth": "Die Anmeldung ist fehlgeschlagen. Prüfe Firmenkennung, Benutzerkennung und Passwort.",
+          "invalid_code": "Der Authenticator-Code wurde abgelehnt oder die Anmeldung ist abgelaufen. Versuche einen neuen Code oder starte die Anmeldung erneut.",
+          "unsupported_mfa": "Diese Anmeldung benötigt einen nicht unterstützten zweiten Faktor oder eine interaktive Bestätigung. Verwende eine Mitarbeiteranmeldung mit Authenticator.",
+          "session_expired": "Die Mitarbeitersitzung ist abgelaufen. Melde dich erneut an.",
+          "mfa_required": "Gib einen aktuellen Authenticator-Code ein.",
+          "different_account": "Dieser Eintrag gehört zu einem anderen Mitarbeiter. Füge für ein anderes Konto einen neuen Integrationseintrag hinzu.",
+          "portal_changed": "Das Portal konnte nicht zuverlässig gelesen werden. Prüfe Änderungen am Portal und aktualisiere den Worker.",
+          "busy": "Der Browser-Worker ist beschäftigt. Versuche es gleich erneut.",
+          "not_found": "Die Mitarbeitersitzung wurde nicht gefunden. Starte die Anmeldung erneut.",
+          "invalid_request": "Der Worker hat die Anfrage abgelehnt. Aktualisiere Integration und Worker zusammen.",
+          "unknown": "Ein unerwarteter Fehler ist aufgetreten.",
+          "ssh_host_key": "SSH-Hostschlüssel stimmt nicht mit dem bekannten Schlüssel überein. Host prüfen und Verbindung neu konfigurieren."
+        },
+        "abort": {
+          "entry_removed": "Der Integrationseintrag wurde entfernt.",
+          "different_account": "Dieser Eintrag gehört zu einem anderen Mitarbeiter. Füge für ein anderes Konto einen neuen Integrationseintrag hinzu."
+        }
+      }
+    },
+    "worker_auth": {
+      "title": "SSH-Anmeldung prüfen",
+      "description": "Die SSH-Anmeldung für {name} ist fehlgeschlagen. In der Neukonfiguration Benutzer und Schlüsseldatei prüfen."
+    },
+    "worker_unavailable": {
+      "title": "Browser-Worker nicht erreichbar",
+      "description": "SSH oder Chromium für {name} ist nicht erreichbar. Verbindung, Worker-Paket und Browser prüfen. Nach Wiederherstellung werden Updates automatisch fortgesetzt."
+    },
+    "portal_changed": {
+      "title": "HR WORKS-Portal prüfen",
+      "description": "Der Worker kann {name} nicht zuverlässig lesen. Aktualisiere den Worker für das aktuelle Portal-Layout. Fehlende Werte bleiben nicht verfügbar und werden niemals durch Null ersetzt."
+    },
+    "write_uncertain": {
+      "title": "Arbeitszeiteintrag prüfen",
+      "description": "Ein Eintrag für {name} konnte nicht bestätigt werden. Prüfe den Tag in HR WORKS, bevor du es erneut versuchst; der Eintrag könnte bereits gespeichert worden sein. Einträge werden niemals automatisch wiederholt."
+    },
+    "ssh_host_key": {
+      "title": "SSH-Hostschlüssel prüfen",
+      "description": "Der SSH-Hostschlüssel für {name} konnte nicht verifiziert werden. Host prüfen und known_hosts in der Neukonfiguration aktualisieren."
+    }
+  },
+  "exceptions": {
+    "select_account": {
+      "message": "Wähle mit config_entry_id ein geladenes HR WORKS-Konto aus."
+    },
+    "writes_disabled": {
+      "message": "Erlaube Arbeitszeiteinträge in den Integrationsoptionen, bevor du Einträge speicherst."
+    },
+    "record_failed": {
+      "message": "Arbeitszeitanfrage fehlgeschlagen: {reason}."
+    }
+  },
+  "services": {
+    "record_working_time": {
+      "name": "Arbeitszeit eintragen",
+      "description": "Zeige eine Vorschau oder speichere ein abgeschlossenes Intervall. Mittagspausen und Arztbesuche bleiben getrennte Einträge.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konto"
+        },
+        "start": {
+          "name": "Beginn",
+          "description": "ISO-Zeitstempel mit Zeitzonenoffset."
+        },
+        "end": {
+          "name": "Ende",
+          "description": "ISO-Zeitstempel mit Zeitzonenoffset."
+        },
+        "type": {
+          "name": "Arbeitszeitart"
+        },
+        "comment": {
+          "name": "Kommentar"
+        },
+        "dry_run": {
+          "name": "Nur Vorschau",
+          "description": "Prüfe Intervall und Überschneidungen, ohne etwas zu speichern."
+        }
+      }
+    }
+  },
+  "selector": {
+    "working_time_type": {
+      "options": {
+        "workingTime": "Arbeitszeit",
+        "doctorsAppointment": "Arztbesuch",
+        "businessErrand": "Dienstgang",
+        "educationAndTraining": "Aus- und Weiterbildung"
+      }
+    }
+  }
+}

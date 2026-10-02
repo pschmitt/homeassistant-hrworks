@@ -1,0 +1,271 @@
+{
+  "title": "HR WORKS",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect your browser over SSH",
+        "description": "The worker runs on the SSH host and connects to Chromium there. Provide a verified host key and a private key file available inside Home Assistant. Employee login follows in the next step.",
+        "data": {
+          "ssh_host": "SSH host",
+          "ssh_port": "SSH port",
+          "ssh_username": "SSH username",
+          "ssh_key_path": "SSH private key file in Home Assistant",
+          "ssh_known_hosts": "SSH known_hosts entry",
+          "worker_command": "Remote worker executable",
+          "name": "Device name"
+        }
+      },
+      "reconfigure": {
+        "title": "Connect your browser over SSH",
+        "description": "The worker runs on the SSH host and connects to Chromium there. Provide a verified host key and a private key file available inside Home Assistant. Employee login follows in the next step.",
+        "data": {
+          "ssh_host": "SSH host",
+          "ssh_port": "SSH port",
+          "ssh_username": "SSH username",
+          "ssh_key_path": "SSH private key file in Home Assistant",
+          "ssh_known_hosts": "SSH known_hosts entry",
+          "worker_command": "Remote worker executable",
+          "name": "Device name"
+        }
+      },
+      "account": {
+        "title": "Your employee account",
+        "description": "Use your regular HR WORKS employee login. No company API key is needed. During reconfiguration, leave the password blank to keep it.",
+        "data": {
+          "company_id": "Company ID",
+          "username": "User ID",
+          "password": "Password"
+        }
+      },
+      "mfa": {
+        "title": "Verify your login",
+        "description": "Enter the current six-digit code from your authenticator. The code is used once and is not stored.",
+        "data": {
+          "code": "Authenticator code"
+        }
+      }
+    },
+    "error": {
+      "worker_auth": "SSH authentication failed. Check the username and private key file.",
+      "cannot_connect": "Cannot reach the SSH host or worker. Check SSH access and the installed Nix package.",
+      "browser_unavailable": "The worker cannot reach its browser. Check the browser service.",
+      "incompatible_worker": "The worker protocol is incompatible. Update the integration and worker together.",
+      "invalid_auth": "Login failed. Check the company ID, user ID and password.",
+      "invalid_code": "The authenticator code was rejected or the challenge expired. Try a fresh code, or restart authentication.",
+      "unsupported_mfa": "This login requires an unsupported second factor or interactive challenge. Use an authenticator-enabled employee login.",
+      "session_expired": "The employee session expired. Authenticate again.",
+      "mfa_required": "Enter a current authenticator code.",
+      "different_account": "This entry belongs to a different employee. Add another integration entry for a different account.",
+      "portal_changed": "The portal could not be read reliably. Check for portal changes and update the worker.",
+      "busy": "The browser worker is busy. Try again shortly.",
+      "not_found": "The employee session was not found. Start authentication again.",
+      "invalid_request": "The worker rejected this request. Update the integration and worker together.",
+      "unknown": "An unexpected error occurred.",
+      "ssh_host_key": "SSH host key verification failed. Verify the host and reconfigure the known_hosts entry."
+    },
+    "abort": {
+      "already_configured": "This employee account is already configured.",
+      "reauth_successful": "Authentication completed.",
+      "reconfigure_successful": "Configuration updated.",
+      "unique_id_mismatch": "This entry belongs to a different employee. Add another integration entry for a different account."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Employee data settings",
+        "description": "Choose calendar coverage and update frequency. Working-time submissions require both this option and write support enabled on the worker. Previews always remain available.",
+        "data": {
+          "scan_interval": "Update interval (seconds)",
+          "calendar_past_days": "Calendar history (days)",
+          "calendar_future_days": "Calendar lookahead (days)",
+          "include_sickness": "Include sickness calendar",
+          "include_pending": "Include leave awaiting approval",
+          "enable_time_entry": "Allow working-time submissions"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "monthly_worked": {
+        "name": "Monthly worked time"
+      },
+      "monthly_target": {
+        "name": "Monthly target time"
+      },
+      "monthly_balance": {
+        "name": "Monthly balance"
+      },
+      "carryover": {
+        "name": "Carryover"
+      },
+      "total_balance": {
+        "name": "Total balance"
+      },
+      "absence_deduction": {
+        "name": "Absence deductions"
+      },
+      "time_credit": {
+        "name": "Time credit"
+      },
+      "today_worked": {
+        "name": "Today worked time"
+      },
+      "today_target": {
+        "name": "Today target time"
+      },
+      "today_balance": {
+        "name": "Today balance"
+      },
+      "vacation_remaining": {
+        "name": "Vacation remaining"
+      },
+      "vacation_approved": {
+        "name": "Vacation approved"
+      },
+      "last_updated": {
+        "name": "Last updated"
+      }
+    },
+    "binary_sensor": {
+      "clocked_in": {
+        "name": "Clocked in"
+      },
+      "on_leave": {
+        "name": "On leave"
+      },
+      "on_sick_leave": {
+        "name": "On sick leave"
+      }
+    },
+    "calendar": {
+      "leave": {
+        "name": "Leave"
+      },
+      "sickness": {
+        "name": "Sickness"
+      }
+    },
+    "button": {
+      "refresh": {
+        "name": "Refresh"
+      }
+    }
+  },
+  "issues": {
+    "session_expired": {
+      "title": "Employee login needed",
+      "fix_flow": {
+        "step": {
+          "login": {
+            "title": "Sign in again",
+            "description": "Continue with the saved employee login. Enter a new password only if it changed.",
+            "data": {
+              "password": "Password"
+            }
+          },
+          "mfa": {
+            "title": "Verify your login",
+            "description": "Enter the current six-digit code from your authenticator. The code is used once and is not stored.",
+            "data": {
+              "code": "Authenticator code"
+            }
+          }
+        },
+        "error": {
+          "worker_auth": "SSH authentication failed. Check the username and private key file.",
+          "cannot_connect": "Cannot reach the SSH host or worker. Check SSH access and the installed Nix package.",
+          "browser_unavailable": "The worker cannot reach its browser. Check the browser service.",
+          "incompatible_worker": "The worker protocol is incompatible. Update the integration and worker together.",
+          "invalid_auth": "Login failed. Check the company ID, user ID and password.",
+          "invalid_code": "The authenticator code was rejected or the challenge expired. Try a fresh code, or restart authentication.",
+          "unsupported_mfa": "This login requires an unsupported second factor or interactive challenge. Use an authenticator-enabled employee login.",
+          "session_expired": "The employee session expired. Authenticate again.",
+          "mfa_required": "Enter a current authenticator code.",
+          "different_account": "This entry belongs to a different employee. Add another integration entry for a different account.",
+          "portal_changed": "The portal could not be read reliably. Check for portal changes and update the worker.",
+          "busy": "The browser worker is busy. Try again shortly.",
+          "not_found": "The employee session was not found. Start authentication again.",
+          "invalid_request": "The worker rejected this request. Update the integration and worker together.",
+          "unknown": "An unexpected error occurred.",
+          "ssh_host_key": "SSH host key verification failed. Verify the host and reconfigure the known_hosts entry."
+        },
+        "abort": {
+          "entry_removed": "The integration entry was removed.",
+          "different_account": "This entry belongs to a different employee. Add another integration entry for a different account."
+        }
+      }
+    },
+    "worker_auth": {
+      "title": "SSH authentication needs attention",
+      "description": "SSH authentication for {name} failed. Reconfigure the username and private key file."
+    },
+    "worker_unavailable": {
+      "title": "Browser worker unavailable",
+      "description": "SSH or Chromium for {name} is unavailable. Check the SSH connection, worker package and browser. Updates resume automatically when the connection returns."
+    },
+    "portal_changed": {
+      "title": "HR WORKS portal needs attention",
+      "description": "The worker cannot reliably read {name}. Update the worker for the current portal layout. Missing values are unavailable; they are never replaced with zero."
+    },
+    "write_uncertain": {
+      "title": "Check the working-time submission",
+      "description": "A submission for {name} could not be verified. Inspect the day in HR WORKS before trying again; the entry may already have been saved. Submissions are never retried automatically."
+    },
+    "ssh_host_key": {
+      "title": "Verify the SSH host key",
+      "description": "The SSH host key for {name} could not be verified. Verify the host and update known_hosts through Reconfigure."
+    }
+  },
+  "exceptions": {
+    "select_account": {
+      "message": "Select one loaded HR WORKS account using config_entry_id."
+    },
+    "writes_disabled": {
+      "message": "Enable working-time submissions in integration options before saving entries."
+    },
+    "record_failed": {
+      "message": "Working-time request failed: {reason}."
+    }
+  },
+  "services": {
+    "record_working_time": {
+      "name": "Record working time",
+      "description": "Preview or submit one completed interval. Lunch breaks and doctor appointments remain separate entries.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Account"
+        },
+        "start": {
+          "name": "Start",
+          "description": "ISO timestamp including timezone offset."
+        },
+        "end": {
+          "name": "End",
+          "description": "ISO timestamp including timezone offset."
+        },
+        "type": {
+          "name": "Working time type"
+        },
+        "comment": {
+          "name": "Comment"
+        },
+        "dry_run": {
+          "name": "Preview only",
+          "description": "Check the interval and overlaps without saving anything."
+        }
+      }
+    }
+  },
+  "selector": {
+    "working_time_type": {
+      "options": {
+        "workingTime": "Working time",
+        "doctorsAppointment": "Doctor's appointment",
+        "businessErrand": "Business errand",
+        "educationAndTraining": "Education and training"
+      }
+    }
+  }
+}

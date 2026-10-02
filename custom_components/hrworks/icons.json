@@ -1,0 +1,74 @@
+{
+  "entity": {
+    "sensor": {
+      "monthly_worked": {
+        "default": "mdi:briefcase-clock-outline"
+      },
+      "monthly_target": {
+        "default": "mdi:clock-check-outline"
+      },
+      "monthly_balance": {
+        "default": "mdi:clock-plus-outline"
+      },
+      "carryover": {
+        "default": "mdi:clock-arrow-right-outline"
+      },
+      "total_balance": {
+        "default": "mdi:timer-sand"
+      },
+      "absence_deduction": {
+        "default": "mdi:calendar-minus"
+      },
+      "time_credit": {
+        "default": "mdi:clock-edit-outline"
+      },
+      "today_worked": {
+        "default": "mdi:briefcase-clock"
+      },
+      "today_target": {
+        "default": "mdi:clock-check-outline"
+      },
+      "today_balance": {
+        "default": "mdi:clock-plus-outline"
+      },
+      "vacation_remaining": {
+        "default": "mdi:beach"
+      },
+      "vacation_approved": {
+        "default": "mdi:calendar-check"
+      },
+      "last_updated": {
+        "default": "mdi:cloud-check-outline"
+      }
+    },
+    "binary_sensor": {
+      "clocked_in": {
+        "default": "mdi:briefcase-check-outline"
+      },
+      "on_leave": {
+        "default": "mdi:beach"
+      },
+      "on_sick_leave": {
+        "default": "mdi:medical-bag"
+      }
+    },
+    "calendar": {
+      "leave": {
+        "default": "mdi:calendar-heart"
+      },
+      "sickness": {
+        "default": "mdi:calendar-alert"
+      }
+    },
+    "button": {
+      "refresh": {
+        "default": "mdi:refresh"
+      }
+    }
+  },
+  "services": {
+    "record_working_time": {
+      "service": "mdi:clock-edit-outline"
+    }
+  }
+}

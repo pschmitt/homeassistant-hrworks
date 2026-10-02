@@ -1,0 +1,33 @@
+record_working_time:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: hrworks
+    start:
+      required: true
+      example: "2026-10-02T08:30:00+02:00"
+      selector:
+        text:
+    end:
+      required: true
+      example: "2026-10-02T12:00:00+02:00"
+      selector:
+        text:
+    type:
+      default: workingTime
+      selector:
+        select:
+          translation_key: working_time_type
+          options:
+            - workingTime
+            - doctorsAppointment
+            - businessErrand
+            - educationAndTraining
+    comment:
+      selector:
+        text:
+    dry_run:
+      default: true
+      selector:
+        boolean:
