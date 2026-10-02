@@ -261,10 +261,10 @@
   "selector": {
     "working_time_type": {
       "options": {
-        "workingTime": "Working time",
-        "doctorsAppointment": "Doctor's appointment",
-        "businessErrand": "Business errand",
-        "educationAndTraining": "Education and training"
+        "working_time": "Working time",
+        "doctors_appointment": "Doctor's appointment",
+        "business_errand": "Business errand",
+        "education_and_training": "Education and training"
       }
     }
   }

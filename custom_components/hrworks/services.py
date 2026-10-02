@@ -58,12 +58,12 @@ def register_services(hass) -> None:
                 vol.Optional("config_entry_id"): cv.string,
                 vol.Required("start"): cv.string,
                 vol.Required("end"): cv.string,
-                vol.Optional("type", default="workingTime"): vol.In(
+                vol.Optional("type", default="working_time"): vol.In(
                     [
-                        "workingTime",
-                        "doctorsAppointment",
-                        "businessErrand",
-                        "educationAndTraining",
+                        "working_time",
+                        "doctors_appointment",
+                        "business_errand",
+                        "education_and_training",
                     ]
                 ),
                 vol.Optional("comment", default=""): vol.All(cv.string, vol.Length(max=500)),

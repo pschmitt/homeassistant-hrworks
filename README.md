@@ -118,7 +118,7 @@ action: hrworks.record_working_time
 data:
   start: "2026-10-02T08:30:00+02:00"
   end: "2026-10-02T12:00:00+02:00"
-  type: workingTime
+  type: working_time
   comment: "Morning work"
   dry_run: true
 response_variable: preview

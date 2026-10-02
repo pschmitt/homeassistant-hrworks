@@ -15,15 +15,15 @@ record_working_time:
       selector:
         text:
     type:
-      default: workingTime
+      default: working_time
       selector:
         select:
           translation_key: working_time_type
           options:
-            - workingTime
-            - doctorsAppointment
-            - businessErrand
-            - educationAndTraining
+            - working_time
+            - doctors_appointment
+            - business_errand
+            - education_and_training
     comment:
       selector:
         text:

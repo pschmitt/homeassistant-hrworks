@@ -127,11 +127,17 @@ class EmployeePortal:
 
     async def navigate(self, route: str) -> Page:
         page = await self.open()
-        await page.goto(
-            f"https://ssl6.hrworks.de/o/time-management/{route}", wait_until="domcontentloaded"
-        )
+        target = f"/o/time-management/{route}"
+        link = page.locator(f'a[href="{target}"]:visible').first
+        if "/o/" in page.url and await link.count():
+            await link.click()
+        else:
+            # Third-party scripts can delay DOMContentLoaded on this portal.
+            await page.goto(f"https://ssl6.hrworks.de{target}", wait_until="commit", timeout=45000)
+            await page.locator("body").wait_for(timeout=45000)
         if "login.hrworks.de" in page.url:
             raise PortalError("session_expired", 403)
+        await page.locator(".m-portlet").first.wait_for(state="visible", timeout=45000)
         await self.settle()
         if "login.hrworks.de" in page.url:
             raise PortalError("session_expired", 403)
@@ -482,7 +488,7 @@ class EmployeePortal:
         try:
             start = datetime.fromisoformat(data["start"])
             end = datetime.fromisoformat(data["end"])
-            kind = data.get("type", "workingTime")
+            kind = data.get("type", "working_time")
             comment = data.get("comment", "")
             if start.tzinfo is None or end.tzinfo is None:
                 raise ValueError
@@ -500,10 +506,10 @@ class EmployeePortal:
             ):
                 raise ValueError
             type_labels = {
-                "workingTime": ("Working time", "Arbeitszeit"),
-                "doctorsAppointment": ("Doctor's appointment", "Arztgang"),
-                "businessErrand": ("Business errand", "Dienstgang"),
-                "educationAndTraining": ("Education and Training", "Fortbildung"),
+                "working_time": ("Working time", "Arbeitszeit"),
+                "doctors_appointment": ("Doctor's appointment", "Arztgang"),
+                "business_errand": ("Business errand", "Dienstgang"),
+                "education_and_training": ("Education and Training", "Fortbildung"),
             }
             if kind not in type_labels:
                 raise ValueError
