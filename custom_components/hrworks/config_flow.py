@@ -259,12 +259,21 @@ class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
                                 new_identifiers=(device.identifiers - {(DOMAIN, old)})
                                 | {(DOMAIN, new)},
                             )
-                    self.hass.config_entries.async_update_entry(self._entry, unique_id=new)
             else:
                 self._abort_if_unique_id_mismatch()
-            return self.async_update_reload_and_abort(
-                self._entry, data=self._data, title=self._title
+            # Loaded entries reload through their update listener. An unchanged
+            # login or an entry which failed setup still needs an explicit reload.
+            needs_reload = not self._entry.update_listeners or (
+                self._entry.data == self._data
+                and self._entry.title == self._title
+                and self._entry.unique_id == self._data[CONF_PROFILE]
             )
+            result = self.async_update_and_abort(
+                self._entry, data=self._data, title=self._title, unique_id=self._data[CONF_PROFILE]
+            )
+            if needs_reload:
+                self.hass.config_entries.async_schedule_reload(self._entry.entry_id)
+            return result
         self._abort_if_unique_id_configured()
         return self.async_create_entry(
             title=self._title,

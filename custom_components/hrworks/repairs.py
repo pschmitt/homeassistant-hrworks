@@ -84,6 +84,7 @@ class EmployeeLoginRepair(RepairsFlow):
 
     async def _finish(self, entry):
         await self.client.close()
+        needs_reload = self.settings == entry.data or not entry.update_listeners
         if self.settings != entry.data:
             self.hass.config_entries.async_update_entry(entry, data=self.settings)
         clear_issues(self.hass, entry)
@@ -95,7 +96,8 @@ class EmployeeLoginRepair(RepairsFlow):
                 and flow["context"].get("entry_id") == entry.entry_id
             ):
                 self.hass.config_entries.flow.async_abort(flow["flow_id"])
-        await self.hass.config_entries.async_reload(entry.entry_id)
+        if needs_reload:
+            await self.hass.config_entries.async_reload(entry.entry_id)
         return self.async_create_entry(title="", data={})
 
 

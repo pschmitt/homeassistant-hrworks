@@ -171,7 +171,9 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
         flow.hass = MagicMock()
         flow.hass.config_entries.async_entries.return_value = [flow._entry]
         flow.async_set_unique_id = AsyncMock()
-        flow.async_update_reload_and_abort = MagicMock(return_value={"type": "done"})
+        flow._entry.update_listeners = [object()]
+        flow._entry.title = "HR WORKS"
+        flow.async_update_and_abort = MagicMock(return_value={"type": "done"})
         entity = SimpleNamespace(entity_id="sensor.original", unique_id="a" * 64 + "_today_worked")
         device = SimpleNamespace(id="device-id", identifiers={("hrworks", "a" * 64)})
         with (
@@ -193,9 +195,10 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
         devices.return_value.async_update_device.assert_called_once_with(
             "device-id", new_identifiers={("hrworks", "b" * 64)}
         )
-        flow.hass.config_entries.async_update_entry.assert_called_once_with(
-            flow._entry, unique_id="b" * 64
+        flow.async_update_and_abort.assert_called_once_with(
+            flow._entry, data=flow._data, title="HR WORKS", unique_id="b" * 64
         )
+        flow.hass.config_entries.async_schedule_reload.assert_not_called()
 
     async def test_switch_to_existing_account_is_rejected(self):
         flow = self.flow("reconfigure")
@@ -239,3 +242,34 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
                 "force": True,
             },
         )
+
+    async def test_unchanged_reconfigure_reloads_fresh_session(self):
+        flow = self.flow("reconfigure")
+        del flow._finish
+        flow.handler = "hrworks"
+        flow._entry.entry_id = "entry-id"
+        flow._entry.unique_id = DATA["profile_id"]
+        flow._entry.title = "HR WORKS"
+        flow._entry.update_listeners = [object()]
+        flow.hass = MagicMock()
+        flow.hass.config_entries.async_entries.return_value = [flow._entry]
+        flow.async_set_unique_id = AsyncMock()
+        flow.async_update_and_abort = MagicMock(return_value={"type": "done"})
+        await flow._finish()
+        flow.hass.config_entries.async_schedule_reload.assert_called_once_with("entry-id")
+
+    async def test_entry_without_listener_reloads_after_reauth(self):
+        flow = self.flow("reauth")
+        del flow._finish
+        flow.handler = "hrworks"
+        flow._entry.entry_id = "entry-id"
+        flow._entry.unique_id = DATA["profile_id"]
+        flow._entry.title = "HR WORKS"
+        flow._entry.update_listeners = []
+        flow._data["password"] = "new-password"
+        flow.hass = MagicMock()
+        flow.async_set_unique_id = AsyncMock()
+        flow._abort_if_unique_id_mismatch = MagicMock()
+        flow.async_update_and_abort = MagicMock(return_value={"type": "done"})
+        await flow._finish()
+        flow.hass.config_entries.async_schedule_reload.assert_called_once_with("entry-id")
