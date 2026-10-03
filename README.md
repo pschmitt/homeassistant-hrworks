@@ -162,7 +162,12 @@ as you would your password manager.
 
 With a URI saved, an expired session gets one fresh login and one snapshot retry.
 Rejected codes open the normal authentication repair, with manual code entry
-available. Working-time submissions are never automatically replayed.
+available. A browser or connection failure discards the failed worker session.
+Home Assistant retries the snapshot once immediately, then polls every minute
+while those failures persist. Successful updates restore the configured polling
+interval and clear the worker repair. Working-time submissions are never
+automatically replayed; a browser failure during a submission is reported as
+uncertain so you can check the recorded times before trying again.
 
 The adapter discovers year/month options, follows navigation links, reads editor
 controls through their labels, and discovers working-time choices by displayed

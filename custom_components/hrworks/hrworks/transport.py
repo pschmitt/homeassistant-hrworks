@@ -82,7 +82,7 @@ class Transport(ABC):
                     "write_uncertain" if write and self.submitted else "cannot_connect"
                 ) from None
             except WorkerError as err:
-                if err.code == "incompatible_worker":
+                if err.code in {"incompatible_worker", "browser_unavailable"}:
                     await self.close()
                     if write and self.submitted:
                         raise WorkerError("write_uncertain") from None

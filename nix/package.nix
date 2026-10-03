@@ -5,7 +5,7 @@
 }:
 python3Packages.buildPythonApplication {
   pname = "hrworks-employee";
-  version = "2.0.0";
+  version = "2.0.1";
   pyproject = true;
   src = lib.cleanSource ../.;
   build-system = [ python3Packages.hatchling ];

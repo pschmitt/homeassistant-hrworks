@@ -1,10 +1,12 @@
 """Exercise real HA flow classes with a fake worker, never real HR records."""
 
 import unittest
+from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.hrworks.api import WorkerClient, WorkerError
 from custom_components.hrworks.auth import secret_settings
@@ -130,6 +132,8 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
         )
         coordinator.hass = MagicMock()
         coordinator.last_error = None
+        coordinator._normal_update_interval = timedelta(minutes=15)
+        coordinator.update_interval = coordinator._normal_update_interval
         return coordinator
 
     async def test_expired_session_gets_one_read_recovery(self):
@@ -159,6 +163,67 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(ConfigEntryAuthFailed):
                 await coordinator._async_update_data()
         coordinator.client.login.assert_not_awaited()
+
+    async def test_transient_failure_gets_one_immediate_read_retry(self):
+        for code in ("browser_unavailable", "cannot_connect"):
+            coordinator = self.coordinator()
+            coordinator.client.snapshot.side_effect = [WorkerError(code), {"metrics": {}}]
+            with patch("custom_components.hrworks.coordinator.clear_issues") as clear:
+                result = await coordinator._async_update_data()
+            self.assertEqual(result, {"metrics": {}})
+            self.assertEqual(coordinator.client.snapshot.await_count, 2)
+            coordinator.client.login.assert_not_awaited()
+            self.assertIsNone(coordinator.last_error)
+            self.assertEqual(coordinator.update_interval, timedelta(minutes=15))
+            clear.assert_called_once()
+
+    async def test_persistent_failure_shortens_polling_and_success_restores_it(self):
+        coordinator = self.coordinator()
+        coordinator.client.snapshot.side_effect = WorkerError("browser_unavailable")
+        with patch("custom_components.hrworks.coordinator.create_issue") as issue:
+            with self.assertRaises(UpdateFailed):
+                await coordinator._async_update_data()
+        self.assertEqual(coordinator.client.snapshot.await_count, 2)
+        self.assertEqual(coordinator.update_interval, timedelta(seconds=60))
+        self.assertEqual(issue.call_args.args[-1], "worker_unavailable")
+        coordinator.client.snapshot.side_effect = None
+        coordinator.client.snapshot.return_value = {"metrics": {}}
+        with patch("custom_components.hrworks.coordinator.clear_issues"):
+            await coordinator._async_update_data()
+        self.assertEqual(coordinator.update_interval, timedelta(minutes=15))
+        self.assertIsNone(coordinator.last_error)
+
+    async def test_replacement_worker_can_reauthenticate(self):
+        coordinator = self.coordinator()
+        coordinator.client.snapshot.side_effect = [
+            WorkerError("browser_unavailable"),
+            WorkerError("session_expired"),
+            {"metrics": {}},
+        ]
+        with patch("custom_components.hrworks.coordinator.clear_issues"):
+            await coordinator._async_update_data()
+        self.assertEqual(coordinator.client.snapshot.await_count, 3)
+        coordinator.client.login.assert_awaited_once()
+        coordinator.client.mfa.assert_awaited_once()
+
+    async def test_non_transient_errors_are_not_retried(self):
+        for code in ("portal_changed", "worker_auth", "ssh_host_key", "invalid_request"):
+            coordinator = self.coordinator()
+            coordinator.client.snapshot.side_effect = WorkerError(code)
+            with patch("custom_components.hrworks.coordinator.create_issue"):
+                with self.assertRaises(UpdateFailed):
+                    await coordinator._async_update_data()
+            coordinator.client.snapshot.assert_awaited_once()
+            self.assertEqual(coordinator.update_interval, timedelta(minutes=15))
+
+    async def test_recovery_never_slows_a_faster_configured_interval(self):
+        coordinator = self.coordinator()
+        coordinator._normal_update_interval = timedelta(seconds=30)
+        coordinator.client.snapshot.side_effect = WorkerError("cannot_connect")
+        with patch("custom_components.hrworks.coordinator.create_issue"):
+            with self.assertRaises(UpdateFailed):
+                await coordinator._async_update_data()
+        self.assertEqual(coordinator.update_interval, timedelta(seconds=30))
 
     async def test_account_switch_preserves_entity_ids(self):
         flow = self.flow("reconfigure")

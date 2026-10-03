@@ -50,6 +50,27 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
             await transport.request("profiles/test/record", {"dry_run": True})
         self.assertEqual(error.exception.code, "cannot_connect")
 
+    async def test_browser_failure_discards_worker_without_replaying_request(self):
+        for path, payload, expected in [
+            ("profiles/test/snapshot", {}, "browser_unavailable"),
+            ("profiles/test/record", {"dry_run": True}, "browser_unavailable"),
+            ("profiles/test/record", {"dry_run": False}, "write_uncertain"),
+        ]:
+            transport = FakeTransport()
+            exchange = transport.exchange
+
+            async def failed(message, exchange=exchange):
+                await exchange(message)
+                return '{"error":"browser_unavailable"}'
+
+            transport.exchange = AsyncMock(side_effect=failed)
+            transport.close = AsyncMock()
+            with self.assertRaises(WorkerError) as error:
+                await transport.request(path, payload)
+            self.assertEqual(error.exception.code, expected)
+            transport.close.assert_awaited_once()
+            transport.exchange.assert_awaited_once()
+
     async def test_timeout(self):
         transport = FakeTransport(timeout=0.01)
 

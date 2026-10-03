@@ -24,6 +24,7 @@ class WorkerClient:
         await self.close()
 
     async def close(self):
+        self.capabilities = None
         await self.transport.close()
 
     async def request(self, path: str, payload: dict | None = None) -> dict[str, Any]:

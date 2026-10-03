@@ -26,6 +26,9 @@ from .const import (
 from .totp import InvalidTotp
 
 LOGGER = logging.getLogger(__name__)
+TRANSIENT_ERRORS = {"browser_unavailable", "cannot_connect"}
+RETRY_INTERVAL = timedelta(seconds=60)
+
 ISSUES = (
     "session_expired",
     "worker_auth",
@@ -62,14 +65,15 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
         self.entry = entry
         self.client = client
         self.last_error: str | None = None
+        self._normal_update_interval = timedelta(
+            seconds=int(entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL))
+        )
         super().__init__(
             hass,
             LOGGER,
             name=DOMAIN,
             config_entry=entry,
-            update_interval=timedelta(
-                seconds=int(entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL))
-            ),
+            update_interval=self._normal_update_interval,
         )
 
     async def _async_update_data(self) -> dict:
@@ -82,20 +86,20 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
                 CONF_PENDING: options.get(CONF_PENDING, False),
             }
             try:
-                data = await self.client.snapshot(payload)
+                data = await self._snapshot_with_auth(payload)
             except WorkerError as err:
-                if err.code not in {"session_expired", "mfa_required"} or not self.entry.data.get(
-                    CONF_TOTP_URI
-                ):
+                if err.code not in TRANSIENT_ERRORS:
                     raise
-                # One read recovery only. Submissions are never replayed.
-                try:
-                    await authenticate(self.client, self.entry.data, force=True)
-                except InvalidTotp:
-                    raise WorkerError("invalid_auth") from None
-                data = await self.client.snapshot(payload)
+                # The transport discarded the failed worker under its request lock.
+                # Only reads get one immediate attempt against a fresh worker.
+                data = await self._snapshot_with_auth(payload)
         except WorkerError as err:
             self.last_error = err.code
+            self.update_interval = (
+                min(self._normal_update_interval, RETRY_INTERVAL)
+                if err.code in TRANSIENT_ERRORS
+                else self._normal_update_interval
+            )
             if err.code in {"session_expired", "mfa_required", "invalid_auth", "invalid_code"}:
                 create_issue(self.hass, self.entry, "session_expired")
                 raise ConfigEntryAuthFailed("Employee session needs authentication") from err
@@ -111,5 +115,21 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
             create_issue(self.hass, self.entry, key)
             raise UpdateFailed(err.code) from err
         self.last_error = None
+        self.update_interval = self._normal_update_interval
         clear_issues(self.hass, self.entry)
         return data
+
+    async def _snapshot_with_auth(self, payload: dict) -> dict:
+        """Recover an expired login once, including after worker replacement."""
+        try:
+            return await self.client.snapshot(payload)
+        except WorkerError as err:
+            if err.code not in {"session_expired", "mfa_required"} or not self.entry.data.get(
+                CONF_TOTP_URI
+            ):
+                raise
+        try:
+            await authenticate(self.client, self.entry.data, force=True)
+        except InvalidTotp:
+            raise WorkerError("invalid_auth") from None
+        return await self.client.snapshot(payload)
