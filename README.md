@@ -198,3 +198,43 @@ Nix installs the CLI alongside the configured worker. Read the
 [CLI guide](docs/cli.md) for every subcommand, rbw/SSH setup, calendars, CSV imports,
 private secrets and shell completions, or the [Python guide](docs/python.md) to
 use the shared library directly.
+
+
+### CLI caching
+
+Reads persist in `$XDG_CACHE_HOME/hrworks/reads.sqlite3` (normally
+`~/.cache/hrworks/reads.sqlite3`). The directory is private (`0700`), the database
+is `0600`, and profiles/accounts/endpoints have separate cache keys. The cache
+contains personal HR data; credentials, TOTP seeds and cookies are not cached.
+`HRWORKS_CACHE_DIR` overrides its directory.
+
+| Data | Default freshness |
+|---|---|
+| Today, balance, status, snapshots and calendar reads | 60 seconds |
+| Other days within the last 31 days | 15 minutes |
+| Older days | 24 hours |
+| Future days | 5 minutes |
+| Any day with an open interval | At most 30 seconds |
+
+Month listings reuse individual cached days. `--no-cache`, `--nocache` and `-N`
+fetch live data and refresh the cache; they work before or after subcommands.
+`--cache-ttl SECONDS` or `HRWORKS_CACHE_TTL` overrides freshness, with `0` bypassing
+caching. Open intervals retain their 30-second limit. Expired data is never used
+as an offline fallback. Doctor, authentication checks, previews and submissions
+always contact the worker.
+
+Successful writes and uncertain submissions invalidate the affected day plus
+balances and snapshots, preserving unrelated cached days. Partial imports
+invalidate every attempted day. Invalidation before and after writes also prevents
+an overlapping read from repopulating obsolete data. Login, logout and profile
+changes clear the current profile's cached data. Writes by other tools, including
+Home Assistant or the HR WORKS website, become visible when the TTL expires;
+use `-N` for an immediate refresh.
+
+```bash
+hrworks times list                  # Reuse this month's fresh cached days.
+hrworks times list -N               # Fetch and refresh every requested day.
+hrworks balance --cache-ttl 30       # Require data no older than 30 seconds.
+hrworks cache clear                 # Clear this profile.
+hrworks cache clear --all-profiles  # Clear all cached profiles.
+```

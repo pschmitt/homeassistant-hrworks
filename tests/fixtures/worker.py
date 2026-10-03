@@ -3,11 +3,15 @@
 import json
 import os
 import sys
+from pathlib import Path
 
 for line in sys.stdin:
     message = json.loads(line)
     path = message["path"]
     data = message.get("payload") or {}
+    if request_log := os.environ.get("HRWORKS_TEST_REQUEST_LOG"):
+        with Path(request_log).open("a") as stream:
+            stream.write(json.dumps({"path": path, "payload": data}) + "\n")
     if path == "health":
         result = {
             "protocol_version": 1,

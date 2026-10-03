@@ -7,6 +7,7 @@ import calendar
 import os
 import sys
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
@@ -20,6 +21,7 @@ from rich.text import Text
 
 from . import __version__
 from .auth import authenticate
+from .cache import CachedReads, ReadCache
 from .client import WorkerClient
 from .config import ConfigStore, credentials, redacted
 from .models import TYPE_LABELS, calendar_ics, duration, import_csv, interval
@@ -40,6 +42,7 @@ times_app = typer.Typer(help="Read, preview and record completed intervals.", no
 calendar_app = typer.Typer(
     help="Leave and sickness data and calendar exports.", no_args_is_help=True
 )
+cache_app = typer.Typer(help="Manage private cached employee reads.", no_args_is_help=True)
 config_app = typer.Typer(
     help="Private profiles and credential-provider configuration.", no_args_is_help=True
 )
@@ -48,10 +51,12 @@ for name, group in [
     ("times", times_app),
     ("calendar", calendar_app),
     ("config", config_app),
+    ("cache", cache_app),
 ]:
     app.add_typer(group, name=name)
 
 ERROR_MESSAGES = {
+    "cache_unavailable": "Cannot access the private read cache. Check HRWORKS_CACHE_DIR permissions or remove a damaged cache database.",
     "unsupported_mfa": "This employee login needs an unsupported second factor. Use authenticator TOTP.",
     "busy": "The worker is busy. Try again shortly.",
     "not_found": "Session or operation not found. Authenticate again or update the worker.",
@@ -88,6 +93,8 @@ class Runtime:
     as_json: bool = False
     no_color: bool = False
     non_interactive: bool = False
+    no_cache: bool = False
+    cache_ttl: int | None = None
 
     @property
     def settings(self):
@@ -95,6 +102,9 @@ class Runtime:
 
     def output(self, data, rows=None):
         emit(data, as_json=self.as_json, no_color=self.no_color, rows=rows)
+
+    def cache(self):
+        return ReadCache(self.store.path, self.profile, self.settings)
 
     def client(self, settings):
         if settings.get("transport") == "ssh":
@@ -111,10 +121,17 @@ class Runtime:
             command.append("--enable-writes")
         return WorkerClient(settings, transport=LocalTransport(command))
 
-    def run(self, operation: Callable, *, login=False):
+    def run(self, operation: Callable, *, login=False, cached=True):
         async def execute():
             settings = self.settings
-            async with self.client(settings) as client:
+            async with self.client(settings) as worker:
+                client = (
+                    CachedReads(
+                        worker, self.cache(), settings, bypass=self.no_cache, ttl=self.cache_ttl
+                    )
+                    if cached
+                    else worker
+                )
                 if login:
                     resolved = await asyncio.to_thread(credentials, settings)
                     await self.sign_in(client, resolved)
@@ -128,6 +145,15 @@ class Runtime:
                     if not all(resolved.get(key) for key in ("company_id", "username", "password")):
                         raise error
                     await self.sign_in(client, resolved)
+                    # Cache under the authenticated account identity, including first login.
+                    if cached:
+                        client = CachedReads(
+                            worker,
+                            self.cache(),
+                            self.settings,
+                            bypass=self.no_cache,
+                            ttl=self.cache_ttl,
+                        )
                     # Only read operations use this method's recovery path.
                     return await operation(client)
 
@@ -179,11 +205,29 @@ def root(
     non_interactive: Annotated[
         bool, typer.Option("--non-interactive", help="Never prompt.")
     ] = False,
+    no_cache: Annotated[
+        bool,
+        typer.Option(
+            "--no-cache", "--nocache", "-N", help="Fetch fresh reads and refresh cached data."
+        ),
+    ] = False,
+    cache_ttl: Annotated[
+        int | None,
+        typer.Option(
+            "--cache-ttl",
+            envvar="HRWORKS_CACHE_TTL",
+            min=0,
+            max=604800,
+            help="Override read cache lifetime in seconds (0 bypasses caching).",
+        ),
+    ] = None,
     version: Annotated[
         bool, typer.Option("--version", is_eager=True, help="Print the installed version.")
     ] = False,
 ):
-    ctx.obj = Runtime(ConfigStore(config), profile, as_json, no_color, non_interactive)
+    ctx.obj = Runtime(
+        ConfigStore(config), profile, as_json, no_color, non_interactive, no_cache, cache_ttl
+    )
     if version:
         runtime(ctx).output({"version": __version__})
         raise typer.Exit()
@@ -293,6 +337,7 @@ def login(
     """Authenticate from a configured vault, environment, or private secrets."""
     rt = runtime(ctx)
 
+    rt.cache().invalidate()
     code = sys.stdin.read().strip() if code_stdin else None
 
     async def operation():
@@ -310,13 +355,16 @@ def login(
         async with rt.client(rt.settings) as client:
             return await rt.sign_in(client, settings, force=force, code=code)
 
-    rt.output(asyncio.run(operation()))
+    result = asyncio.run(operation())
+    rt.cache().invalidate()
+    rt.output(result)
 
 
 @auth_app.command("logout")
 def logout(ctx: typer.Context):
     """Remove this employee's browser cookies and saved profile association."""
     rt = runtime(ctx)
+    rt.cache().invalidate()
 
     async def operation():
         async with rt.client(rt.settings) as client:
@@ -333,7 +381,7 @@ def logout(ctx: typer.Context):
 def auth_status(ctx: typer.Context):
     """Verify that the saved employee browser session is usable."""
     rt = runtime(ctx)
-    data = rt.run(lambda client: client.account())
+    data = rt.run(lambda client: client.account(), cached=False)
     rt.output(
         {"authenticated": True, "profile": rt.profile, "period": data["account"].get("period")}
     )
@@ -458,8 +506,19 @@ def _submit(rt: Runtime, entries: list[dict], *, save: bool, yes: bool):
                 raise WorkerError("writes_disabled")
             results = []
             for index, entry in enumerate(entries):
+                cache = rt.cache()
+                affected_day = entry["start"][:10]
                 try:
-                    results.append(await client.record({**entry, "dry_run": False}))
+                    cache.invalidate(affected_day)
+                    try:
+                        result = await client.record({**entry, "dry_run": False})
+                    except BaseException:
+                        # Preserve uncertain-write/cancellation errors even if cleanup fails.
+                        with suppress(WorkerError):
+                            cache.invalidate(affected_day)
+                        raise
+                    results.append(result)
+                    cache.invalidate(affected_day)
                 except WorkerError as error:
                     # Report partial progress and stop. Never retry an uncertain write.
                     return {
@@ -639,6 +698,12 @@ def config_init(
             settings[key] = value
     if known_hosts:
         settings["ssh_known_hosts"] = known_hosts.read_text()
+    previous = rt.store.read().get("profiles", {}).get(rt.profile, {})
+    if any(
+        settings.get(key) != previous.get(key) for key in ("company_id", "username", "rbw_entry")
+    ):
+        settings.pop("profile_id", None)
+    rt.cache().invalidate()
     rt.store.save(rt.profile, settings)
     rt.output(redacted(settings))
 
@@ -673,6 +738,7 @@ def config_secret(
         if field == "totp_uri" and parameters(value)[2] != 6:
             raise InvalidTotp()
         settings[field] = value
+    rt.cache().invalidate()
     rt.store.save(rt.profile, settings)
     rt.output({"field": field, "configured": field in settings})
 
@@ -693,8 +759,17 @@ def config_remove(
             )
         ):
             raise WorkerError("confirmation_required")
+    ReadCache(rt.store.path, name, rt.store.profile(name)).invalidate()
     rt.store.remove(name)
     rt.output({"removed": name})
+
+
+@cache_app.command("clear")
+def cache_clear(ctx: typer.Context, all_profiles: bool = False):
+    """Clear this profile's cache, or all profiles with --all-profiles."""
+    rt = runtime(ctx)
+    rt.cache().invalidate(all_profiles=all_profiles)
+    rt.output({"cleared": "all_profiles" if all_profiles else rt.profile})
 
 
 def normalize_globals(arguments: list[str]) -> list[str]:
@@ -712,8 +787,16 @@ def normalize_globals(arguments: list[str]) -> list[str]:
             visit(child)
 
     visit(command)
-    flags = {"--json", "--no-color", "--non-interactive", "--version"}
-    valued = {"--config", "--profile", "-p"}
+    flags = {
+        "--json",
+        "--no-color",
+        "--non-interactive",
+        "--version",
+        "--no-cache",
+        "--nocache",
+        "-N",
+    }
+    valued = {"--config", "--profile", "-p", "--cache-ttl"}
     prefix = []
     remaining = []
     index = 0

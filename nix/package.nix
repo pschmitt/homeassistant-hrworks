@@ -5,7 +5,7 @@
 }:
 python3Packages.buildPythonApplication {
   pname = "hrworks-employee";
-  version = "2.0.1";
+  version = "2.1.0";
   pyproject = true;
   src = lib.cleanSource ../.;
   build-system = [ python3Packages.hatchling ];
@@ -28,6 +28,7 @@ python3Packages.buildPythonApplication {
   checkPhase = ''
     runHook preCheck
     export PYTHONPATH="$out/${python3Packages.python.sitePackages}:$PWD:$PYTHONPATH"
+    python -m unittest discover -s tests -p test_cache.py
     python -m unittest discover -s tests -p test_cli.py
     python -m unittest discover -s tests -p test_transport.py
     python -m unittest discover -s tests -p test_totp.py

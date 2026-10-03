@@ -47,6 +47,8 @@ class CliTests(unittest.TestCase):
             key: value for key, value in os.environ.items() if not key.startswith("HRWORKS_")
         }
 
+        self.env["HRWORKS_CACHE_DIR"] = str(root / "cache")
+
     def cli(self, *args, input=None):
         return subprocess.run(
             [sys.executable, "-m", "hrworks.cli", "--config", str(self.config), *args],
@@ -300,3 +302,132 @@ class CliTests(unittest.TestCase):
         self.assertEqual(len(days), today.day)
         self.assertEqual(days[0]["date"], today.replace(day=1).isoformat())
         self.assertTrue(all(day["date"].startswith(today.strftime("%Y-%m")) for day in days))
+
+    def request_log(self):
+        path = Path(self.directory.name) / "requests.jsonl"
+        self.env["HRWORKS_TEST_REQUEST_LOG"] = str(path)
+        return path
+
+    def requests(self, path, suffix):
+        return (
+            [
+                json.loads(line)
+                for line in path.read_text().splitlines()
+                if json.loads(line)["path"].endswith(suffix)
+            ]
+            if path.exists()
+            else []
+        )
+
+    def test_cache_persists_and_all_bypass_aliases_refresh(self):
+        log = self.request_log()
+        first = self.cli("balance", "--json")
+        second = self.cli("balance", "--json")
+        self.assertEqual(first.returncode, 0, first.stdout)
+        self.assertEqual(second.stdout, first.stdout)
+        self.assertEqual(len(self.requests(log, "/account")), 1)
+        for flag in ("--no-cache", "--nocache", "-N"):
+            result = self.cli("balance", flag, "--json")
+            self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(len(self.requests(log, "/account")), 4)
+        self.cli("balance", "--json")
+        self.assertEqual(len(self.requests(log, "/account")), 4)
+
+    def test_month_reuses_individual_cached_days(self):
+        log = self.request_log()
+        result = self.cli("times", "list", "--date", "2026-09-01", "--json")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        result = self.cli("times", "list", "--month", "2026-09", "--json")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(len(self.requests(log, "/day")), 30)
+        result = self.cli("times", "list", "--month", "2026-09", "--json")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(len(self.requests(log, "/day")), 30)
+
+    def test_write_evicts_its_day_and_balance_but_preview_keeps_cache(self):
+        log = self.request_log()
+        for day in ("2026-09-01", "2026-09-02"):
+            self.cli("times", "list", "--date", day, "--json")
+        self.cli("balance", "--json")
+        args = (
+            "times",
+            "record",
+            "--date",
+            "2026-09-01",
+            "--start",
+            "08:00",
+            "--end",
+            "12:00",
+            "--json",
+        )
+        self.cli(*args)
+        self.cli("times", "list", "--date", "2026-09-01", "--json")
+        self.assertEqual(len(self.requests(log, "/day")), 2)
+        result = self.cli(*args, "--save", "--yes")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.cli("times", "list", "--date", "2026-09-01", "--json")
+        self.cli("times", "list", "--date", "2026-09-02", "--json")
+        self.cli("balance", "--json")
+        self.assertEqual(len(self.requests(log, "/day")), 3)
+        self.assertEqual(len(self.requests(log, "/account")), 2)
+
+    def test_uncertain_write_and_partial_import_evict_affected_data(self):
+        log = self.request_log()
+        for day in ("2026-09-01", "2026-09-02", "2026-09-03"):
+            self.cli("times", "list", "--date", day, "--json")
+        self.env["HRWORKS_TEST_FAIL_WRITE"] = "1"
+        path = Path(self.directory.name) / "partial.csv"
+        path.write_text(
+            "date,start,end\n2026-09-01,08:00,12:00\n2026-09-02,13:00,17:00\n2026-09-03,08:00,12:00\n"
+        )
+        result = self.cli("times", "import", str(path), "--save", "--yes", "--json")
+        self.assertEqual(result.returncode, 4, result.stdout)
+        for day in ("2026-09-01", "2026-09-02", "2026-09-03"):
+            self.cli("times", "list", "--date", day, "--json")
+        self.assertEqual(len(self.requests(log, "/day")), 5)
+        writes = [r for r in self.requests(log, "/record") if not r["payload"]["dry_run"]]
+        self.assertEqual(len(writes), 2)
+
+    def test_auth_status_and_doctor_remain_live_and_clear_is_explicit(self):
+        log = self.request_log()
+        for _ in range(2):
+            self.cli("auth", "status", "--json")
+            self.cli("doctor", "--json")
+        self.assertEqual(len(self.requests(log, "/account")), 2)
+        self.cli("balance", "--json")
+        result = self.cli("cache", "clear", "--json")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.cli("balance", "--json")
+        self.assertEqual(len(self.requests(log, "/account")), 4)
+
+    def test_ttl_override_and_secret_rotation_invalidate_cache(self):
+        log = self.request_log()
+        for _ in range(2):
+            result = self.cli("balance", "--cache-ttl", "0", "--json")
+            self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(len(self.requests(log, "/account")), 2)
+        self.cli("balance", "--json")
+        self.cli("config", "secret", "password", "--stdin", "--json", input="synthetic\n")
+        self.cli("balance", "--json")
+        self.assertEqual(len(self.requests(log, "/account")), 4)
+        self.assertEqual(
+            normalize_globals(["times", "record", "--comment", "-N", "--nocache"]),
+            ["--nocache", "times", "record", "--comment", "-N"],
+        )
+
+    def test_changing_account_clears_prior_cache_and_session(self):
+        from hrworks.cache import ReadCache
+
+        log = self.request_log()
+        result = self.cli("balance", "--json")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        with patch.dict(os.environ, {"HRWORKS_CACHE_DIR": self.env["HRWORKS_CACHE_DIR"]}):
+            old_cache = ReadCache(self.config, "default", self.store.profile("default"))
+            result = self.cli(
+                "config", "init", "--username", "different", "--worker", str(self.worker), "--json"
+            )
+            self.assertEqual(result.returncode, 0, result.stdout)
+            self.assertNotIn("profile_id", self.store.profile("default"))
+            with old_cache.connection() as connection:
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM reads").fetchone()[0], 0)
+        self.assertEqual(len(self.requests(log, "/account")), 1)
