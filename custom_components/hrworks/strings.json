@@ -30,21 +30,14 @@
       },
       "account": {
         "title": "Your employee account",
-        "description": "Use your employee login. Reconfigure can change company, username and password. Blank secret fields keep saved values. An optional otpauth://totp/... URI enables automatic authenticator codes.",
+        "description": "Use your employee login. Reconfigure can change company, username and password. Blank secret fields keep saved values. A saved TOTP URI is tried automatically; enter a six-digit code here if needed.",
         "data": {
           "company_id": "Company ID",
           "username": "User ID",
           "password": "Password",
           "totp_uri": "TOTP URI (optional)",
-          "clear_totp": "Remove saved TOTP URI"
-        }
-      },
-      "mfa": {
-        "title": "Verify your login",
-        "description": "Enter a current six-digit code or your authenticator’s otpauth://totp/... URI. The URI is saved for future logins; individual codes are never stored.",
-        "data": {
-          "code": "Authenticator code",
-          "totp_uri": "TOTP URI (optional)"
+          "clear_totp": "Remove saved TOTP URI",
+          "code": "Authenticator code (optional)"
         }
       }
     },
@@ -164,19 +157,12 @@
         "step": {
           "login": {
             "title": "Sign in again",
-            "description": "Continue with the saved employee login. Enter a new password only if it changed.",
+            "description": "Continue with the saved employee login. A saved TOTP URI is tried automatically. Enter a six-digit code if needed, or replace the URI here.",
             "data": {
               "password": "Password",
               "totp_uri": "TOTP URI (optional)",
-              "clear_totp": "Remove saved TOTP URI"
-            }
-          },
-          "mfa": {
-            "title": "Verify your login",
-            "description": "Enter a current six-digit code or your authenticator’s otpauth://totp/... URI. The URI is saved for future logins; individual codes are never stored.",
-            "data": {
-              "code": "Authenticator code",
-              "totp_uri": "TOTP URI (optional)"
+              "clear_totp": "Remove saved TOTP URI",
+              "code": "Authenticator code (optional)"
             }
           }
         },

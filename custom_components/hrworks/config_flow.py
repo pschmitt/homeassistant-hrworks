@@ -80,6 +80,7 @@ def account_schema(defaults: dict, *, existing: bool = False) -> vol.Schema:
             vol.Required(CONF_USERNAME, default=defaults.get(CONF_USERNAME, "")): TextSelector(),
             password: PASSWORD,
             vol.Optional(CONF_TOTP_URI): PASSWORD,
+            vol.Optional(CONF_CODE): PASSWORD,
             **(
                 {vol.Optional("clear_totp", default=False): BooleanSelector()}
                 if defaults.get(CONF_TOTP_URI)
@@ -103,6 +104,7 @@ class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
         self._title = "HR WORKS"
         self._client: WorkerClient | None = None
         self._entry: ConfigEntry | None = None
+        self._mfa_pending = False
 
     @staticmethod
     @callback
@@ -171,64 +173,70 @@ class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_account(self, user_input: dict | None = None) -> ConfigFlowResult:
         errors = {}
         if user_input is not None:
-            company = user_input[CONF_COMPANY].strip()
-            username = user_input[CONF_USERNAME].strip()
-            password = user_input.get(CONF_PASSWORD) or self._data.get(CONF_PASSWORD)
-            if (
-                self._entry
-                and self.source != "reconfigure"
-                and (
-                    company.casefold() != self._entry.data[CONF_COMPANY].casefold()
-                    or username.casefold() != self._entry.data[CONF_USERNAME].casefold()
-                )
-            ):
-                errors["base"] = "different_account"
-            elif not password:
-                errors["base"] = "invalid_auth"
-            else:
+            if self._mfa_pending:
                 try:
-                    settings = secret_settings(self._data, user_input)
-                    result = await self._client.login(company, username, password, force=True)
+                    self._data = await complete_mfa(self._client, self._data, user_input)
                 except InvalidTotp:
                     errors["base"] = "invalid_totp"
                 except WorkerError as err:
                     errors["base"] = err.code
                 else:
-                    self._data = settings
-                    self._data.update(
-                        {
-                            CONF_COMPANY: company,
-                            CONF_USERNAME: username,
-                            CONF_PASSWORD: password,
-                            CONF_PROFILE: result["profile_id"],
-                        }
-                    )
-                    if result.get("mfa_required"):
-                        return await self.async_step_mfa(
-                            {} if self._data.get(CONF_TOTP_URI) else None
-                        )
+                    self._mfa_pending = False
                     return await self._finish()
+            else:
+                company = user_input[CONF_COMPANY].strip()
+                username = user_input[CONF_USERNAME].strip()
+                password = user_input.get(CONF_PASSWORD) or self._data.get(CONF_PASSWORD)
+                if (
+                    self._entry
+                    and self.source != "reconfigure"
+                    and (
+                        company.casefold() != self._entry.data[CONF_COMPANY].casefold()
+                        or username.casefold() != self._entry.data[CONF_USERNAME].casefold()
+                    )
+                ):
+                    errors["base"] = "different_account"
+                elif not password:
+                    errors["base"] = "invalid_auth"
+                else:
+                    try:
+                        settings = secret_settings(self._data, user_input)
+                        result = await self._client.login(company, username, password, force=True)
+                    except InvalidTotp:
+                        errors["base"] = "invalid_totp"
+                    except WorkerError as err:
+                        errors["base"] = err.code
+                    else:
+                        self._data = settings
+                        self._data.update(
+                            {
+                                CONF_COMPANY: company,
+                                CONF_USERNAME: username,
+                                CONF_PASSWORD: password,
+                                CONF_PROFILE: result["profile_id"],
+                            }
+                        )
+                        if result.get("mfa_required"):
+                            self._mfa_pending = True
+                            if not user_input.get(CONF_CODE) and not self._data.get(CONF_TOTP_URI):
+                                errors["base"] = "mfa_required"
+                            else:
+                                try:
+                                    self._data = await complete_mfa(
+                                        self._client, self._data, user_input
+                                    )
+                                except InvalidTotp:
+                                    errors["base"] = "invalid_totp"
+                                except WorkerError as err:
+                                    errors["base"] = err.code
+                                else:
+                                    self._mfa_pending = False
+                                    return await self._finish()
+                        else:
+                            return await self._finish()
         return self.async_show_form(
             step_id="account",
             data_schema=account_schema(self._data, existing=self._entry is not None),
-            errors=errors,
-        )
-
-    async def async_step_mfa(self, user_input: dict | None = None) -> ConfigFlowResult:
-        errors = {}
-        if user_input is not None:
-            try:
-                settings = await complete_mfa(self._client, self._data, user_input)
-            except InvalidTotp:
-                errors["base"] = "invalid_totp"
-            except WorkerError as err:
-                errors["base"] = err.code
-            else:
-                self._data = settings
-                return await self._finish()
-        return self.async_show_form(
-            step_id="mfa",
-            data_schema=mfa_schema(),
             errors=errors,
         )
 

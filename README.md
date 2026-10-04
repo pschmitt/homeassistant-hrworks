@@ -71,8 +71,9 @@ can override it. Login cookies are runtime state and never go into the Nix store
 3. Enter the SSH host, port and username, the key file path **inside HA**, and a
    verified `known_hosts` entry. The remote executable defaults to `hrworks-worker`;
    an absolute executable path is also supported.
-4. Enter your employee company ID, user ID and password, then an authenticator code
-   if requested. One-time codes are never stored.
+4. Enter your employee company ID, user ID and password. If MFA is requested, a
+   saved TOTP URI is tried automatically; enter a one-time code on the same form
+   if needed. One-time codes are never stored.
 
 Keep SSH private keys in runtime secret files (for example SOPS-managed files),
 never in a flake or Nix string. The existing HA SSH key can be reused where authorized.
@@ -85,8 +86,9 @@ browser user's state directory.
   A blank employee password keeps the existing value. Changing employees requires a new entry.
 - **Options:** update interval (5 minutes–1 day), calendar history and lookahead
   (up to two years each), pending leave, sickness visibility and time-entry permissions.
-- **Repairs:** expired employee sessions can be repaired with the saved login and a
-  fresh authenticator code. Worker failures and portal changes have specific guidance.
+- **Repairs:** expired employee sessions can be repaired on one form with the saved
+  login, TOTP URI and an optional fresh authenticator code. Worker failures and portal
+  changes have specific guidance.
 - **Diagnostics:** contain metric names, counts and operational status; exclude
   credentials, company/user IDs, SSH addresses and host keys, event details and HR values.
 
@@ -161,8 +163,8 @@ Only the generated one-time code crosses SSH. Protect Home Assistant backups
 as you would your password manager.
 
 With a URI saved, an expired session gets one fresh login and one snapshot retry.
-Rejected codes open the normal authentication repair, with manual code entry
-available. A browser or connection failure discards the failed worker session.
+If the portal rejects the generated code, the login form stays open for a manual
+code or an updated URI. A browser or connection failure discards the failed worker session.
 Home Assistant retries the snapshot once immediately, then polls every minute
 while those failures persist. Successful updates restore the configured polling
 interval and clear the worker repair. Working-time submissions are never

@@ -30,21 +30,14 @@
       },
       "account": {
         "title": "Dein Mitarbeiterkonto",
-        "description": "Verwende deinen Mitarbeiter-Login. In der Neukonfiguration können Firma, Benutzer und Passwort geändert werden. Leere Geheimnisfelder behalten den gespeicherten Wert. Die optionale otpauth://totp/...-URI ermöglicht automatische Authenticator-Codes.",
+        "description": "Verwende deinen Mitarbeiter-Login. In der Neukonfiguration können Firma, Benutzer und Passwort geändert werden. Leere Geheimnisfelder behalten den gespeicherten Wert. Eine gespeicherte TOTP-URI wird automatisch verwendet; gib bei Bedarf hier einen sechsstelligen Code ein.",
         "data": {
           "company_id": "Firmenkennung",
           "username": "Benutzerkennung",
           "password": "Passwort",
           "totp_uri": "TOTP-URI (optional)",
-          "clear_totp": "Gespeicherte TOTP-URI entfernen"
-        }
-      },
-      "mfa": {
-        "title": "Anmeldung bestätigen",
-        "description": "Gib einen aktuellen sechsstelligen Code oder die otpauth://totp/...-URI deines Authenticators ein. Die URI wird für spätere Anmeldungen gespeichert; einzelne Codes werden nicht gespeichert.",
-        "data": {
-          "code": "Authenticator-Code",
-          "totp_uri": "TOTP-URI (optional)"
+          "clear_totp": "Gespeicherte TOTP-URI entfernen",
+          "code": "Authenticator-Code (optional)"
         }
       }
     },
@@ -164,19 +157,12 @@
         "step": {
           "login": {
             "title": "Erneut anmelden",
-            "description": "Fahre mit der gespeicherten Mitarbeiteranmeldung fort. Gib nur dann ein neues Passwort ein, wenn es sich geändert hat.",
+            "description": "Fahre mit der gespeicherten Mitarbeiteranmeldung fort. Eine gespeicherte TOTP-URI wird automatisch verwendet. Gib bei Bedarf einen sechsstelligen Code ein oder ersetze hier die URI.",
             "data": {
               "password": "Passwort",
               "totp_uri": "TOTP-URI (optional)",
-              "clear_totp": "Gespeicherte TOTP-URI entfernen"
-            }
-          },
-          "mfa": {
-            "title": "Anmeldung bestätigen",
-            "description": "Gib einen aktuellen sechsstelligen Code oder die otpauth://totp/...-URI deines Authenticators ein. Die URI wird für spätere Anmeldungen gespeichert; einzelne Codes werden nicht gespeichert.",
-            "data": {
-              "code": "Authenticator-Code",
-              "totp_uri": "TOTP-URI (optional)"
+              "clear_totp": "Gespeicherte TOTP-URI entfernen",
+              "code": "Authenticator-Code (optional)"
             }
           }
         },
