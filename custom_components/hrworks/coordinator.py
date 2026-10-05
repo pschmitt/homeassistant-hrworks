@@ -101,6 +101,10 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
                 else self._normal_update_interval
             )
             if err.code in {"session_expired", "mfa_required", "invalid_auth", "invalid_code"}:
+                LOGGER.warning(
+                    "HR WORKS refresh still requires authentication (error=%s); raising repair",
+                    err.code,
+                )
                 create_issue(self.hass, self.entry, "session_expired")
                 raise ConfigEntryAuthFailed("Employee session needs authentication") from err
             key = (
@@ -124,12 +128,40 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
         try:
             return await self.client.snapshot(payload)
         except WorkerError as err:
-            if err.code not in {"session_expired", "mfa_required"} or not self.entry.data.get(
-                CONF_TOTP_URI
-            ):
+            if err.code not in {"session_expired", "mfa_required"}:
                 raise
+            if not self.entry.data.get(CONF_TOTP_URI):
+                LOGGER.warning(
+                    "HR WORKS session requires authentication (error=%s); "
+                    "automatic recovery skipped because no TOTP URI is saved",
+                    err.code,
+                )
+                raise
+            LOGGER.debug(
+                "HR WORKS session requires authentication (error=%s); "
+                "trying automatic recovery with saved TOTP",
+                err.code,
+            )
         try:
             await authenticate(self.client, self.entry.data, force=True)
         except InvalidTotp:
+            LOGGER.warning("HR WORKS automatic recovery could not parse the saved TOTP URI")
             raise WorkerError("invalid_auth") from None
-        return await self.client.snapshot(payload)
+        except WorkerError as err:
+            stage = (
+                "MFA verification"
+                if err.code in {"invalid_code", "mfa_required", "unsupported_mfa"}
+                else "employee login"
+            )
+            LOGGER.warning(
+                "HR WORKS automatic recovery failed during %s (error=%s)", stage, err.code
+            )
+            raise
+        try:
+            return await self.client.snapshot(payload)
+        except WorkerError as err:
+            LOGGER.warning(
+                "HR WORKS automatic recovery completed but data refresh failed (error=%s)",
+                err.code,
+            )
+            raise
