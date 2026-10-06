@@ -20,11 +20,6 @@
         {
           inherit hrworks;
           default = hrworks;
-          worker = hrworks.overrideAttrs (old: {
-            meta = old.meta // {
-              mainProgram = "hrworks-worker";
-            };
-          });
         }
       );
       apps = forAllSystems (system: {
@@ -32,10 +27,6 @@
         hrworks = {
           type = "app";
           program = "${self.packages.${system}.hrworks}/bin/hrworks";
-        };
-        worker = {
-          type = "app";
-          program = "${self.packages.${system}.worker}/bin/hrworks-worker";
         };
       });
       nixosModules = {

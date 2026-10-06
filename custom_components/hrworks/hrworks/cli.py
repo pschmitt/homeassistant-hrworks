@@ -5,13 +5,14 @@ from __future__ import annotations
 import asyncio
 import calendar
 import os
+import shlex
 import sys
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import typer
@@ -113,7 +114,7 @@ class Runtime:
             return WorkerClient(settings)
         if settings.get("transport") != "local":
             raise WorkerError("invalid_config")
-        command = [settings.get("worker_command", "hrworks-worker"), "--stdio"]
+        command = shlex.split(settings.get("worker_command", "hrworks worker")) + ["--stdio"]
         for key, flag in [("cdp_url", "--cdp-url"), ("state_dir", "--state-dir")]:
             if settings.get(key):
                 command.extend([flag, str(settings[key])])
@@ -239,6 +240,28 @@ def doctor(ctx: typer.Context):
     rt = runtime(ctx)
     result = rt.run(lambda client: client.health())
     rt.output(result)
+
+
+@app.command()
+def worker(
+    _ctx: typer.Context,
+    cdp_url: Annotated[str, typer.Option("--cdp-url")] = "http://127.0.0.1:9222",
+    browser_backend: Annotated[Literal["cdp", "steel"], typer.Option("--browser-backend")] = "cdp",
+    steel_api_url: Annotated[str, typer.Option("--steel-api-url")] = "http://127.0.0.1:3002",
+    state_dir: Annotated[Path | None, typer.Option("--state-dir")] = None,
+    enable_writes: Annotated[bool, typer.Option("--enable-writes")] = False,
+    _stdio: Annotated[bool, typer.Option("--stdio", hidden=True)] = False,
+):
+    """Run the JSON-line browser worker for local use or SSH transport."""
+    from hrworks_worker.server import run_worker
+
+    run_worker(
+        cdp_url=cdp_url,
+        backend=browser_backend,
+        steel_api_url=steel_api_url,
+        state_dir=state_dir or Path.home() / ".local/state/hrworks-worker",
+        enable_writes=enable_writes,
+    )
 
 
 @app.command()
@@ -655,7 +678,7 @@ def config_init(
     rbw_entry: str | None = None,
     company_id: str | None = None,
     username: str | None = None,
-    worker: str = "hrworks-worker",
+    worker: str = "hrworks worker",
     cdp_url: str | None = None,
     state_dir: Path | None = None,
     timezone: str = "Europe/Berlin",

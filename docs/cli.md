@@ -21,13 +21,14 @@ A local checkout also works with `uv run hrworks`, `uv tool install .`, or
 Git installation; publication to PyPI is not required.
 
 Nix users can enable `programs.hrworksWorker.enable`. The module installs both
-CLI names and the configured worker; Bash, Zsh and Fish completions are packaged.
+CLI names and configures the `hrworks worker` subcommand; Bash, Zsh and Fish
+completions are packaged.
 The Nix worker's `enableWrites` remains the deployment-level write permission.
 
 ## Browser and connection
 
 Use a running Chromium with a CDP endpoint. The CLI starts a private worker
-process and an isolated browser context; it never closes the shared browser.
+process with `hrworks worker` and an isolated browser context; it never closes the shared browser.
 The default CDP endpoint is `http://127.0.0.1:9222`. Cookie state is private to the
 worker's OS user, shared with HA when they use that same worker user.
 
@@ -50,7 +51,7 @@ hrworks --profile work auth login
 
 SSH reads `~/.ssh/known_hosts` and uses strict verification. To supply verified
 keys explicitly, use `config init --known-hosts <file>`. It never accepts a host
-key automatically. `--worker` selects the remote executable or local worker.
+key automatically. `--worker` selects the remote worker command or local worker command.
 
 The optional `rbw` provider reads the username, password, TOTP URI, and a custom
 field named `Company ID` into memory. Unlock rbw first. If the entry lacks a
@@ -102,6 +103,7 @@ hrworks calendar list --kind leave --json
 | `config secret password` | Save a password using a masked prompt or `--stdin` |
 | `config secret totp_uri` | Save an `otpauth://totp/...` URI; `--clear` removes it |
 | `config remove NAME` | Remove profile configuration after confirmation |
+| `worker` | Run the JSON-line browser worker with CDP or Steel |
 | `completion SHELL` | Completion script for bash, zsh, fish, powershell or pwsh |
 
 `times list --month` reads days serially through the portal and can take several
@@ -208,8 +210,7 @@ programs.hrworks.enable = true;
 Alternatively, put `hrworks.packages.${pkgs.stdenv.hostPlatform.system}.hrworks`
 in `environment.systemPackages` or Home Manager's `home.packages`.
 Bash, Zsh and Fish completions are included. `nixosModules.worker` configures
-an SSH browser worker; `nixosModules.default` remains its compatibility alias.
-The `#worker` package/app runs `hrworks-worker` directly.
+the defaults for `hrworks worker`; `nixosModules.default` imports the same module.
 
 Installations are declarative; employee secrets and browser sessions stay in
 private runtime storage. A workstation can use `config init --transport ssh`

@@ -71,18 +71,19 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
         flow = self.flow()
         flow._client.mfa.side_effect = [WorkerError("invalid_code"), {}]
         result = await flow.async_step_account({**DATA, "totp_uri": URI})
-        self.assertEqual(result["step_id"], "mfa")
+        self.assertEqual(result["step_id"], "account")
         self.assertEqual(result["errors"]["base"], "invalid_code")
-        await flow.async_step_mfa({"code": "123456"})
+        await flow.async_step_account({"code": "123456"})
         flow._client.mfa.assert_awaited_with("123456")
         flow._finish.assert_awaited_once()
 
     async def test_uri_can_be_entered_only_at_mfa_challenge(self):
         flow = self.flow()
         result = await flow.async_step_account(DATA)
-        self.assertEqual(result["step_id"], "mfa")
+        self.assertEqual(result["step_id"], "account")
+        self.assertEqual(result["errors"]["base"], "mfa_required")
         flow._client.mfa.assert_not_awaited()
-        await flow.async_step_mfa({"totp_uri": URI})
+        await flow.async_step_account({"totp_uri": URI})
         self.assertEqual(flow._data["totp_uri"], URI)
 
     async def test_invalid_uri_does_not_contact_worker(self):
@@ -110,13 +111,14 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
         repair.hass.config_entries.async_get_entry.return_value = entry
         repair.client = SimpleNamespace(mfa=AsyncMock(side_effect=WorkerError("invalid_code")))
         repair.settings = dict(DATA)
+        repair._mfa_pending = True
         repair._finish = AsyncMock(return_value={"type": "done"})
-        result = await repair.async_step_mfa({"totp_uri": URI})
+        result = await repair.async_step_login({"totp_uri": URI})
         self.assertEqual(result["errors"]["base"], "invalid_code")
         self.assertNotIn("totp_uri", repair.settings)
         repair.hass.config_entries.async_update_entry.assert_not_called()
         repair.client.mfa.side_effect = None
-        await repair.async_step_mfa({"totp_uri": URI})
+        await repair.async_step_login({"totp_uri": URI})
         self.assertEqual(repair.settings["totp_uri"], URI)
         repair._finish.assert_awaited_once_with(entry)
 

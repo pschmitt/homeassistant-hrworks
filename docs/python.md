@@ -14,7 +14,7 @@ from hrworks import WorkerClient, LocalTransport, authenticate
 async def main():
     settings = {"company_id": "example", "username": "employee", "password": "..."}
     # Resolve secrets from your credential provider, never hardcode production secrets.
-    transport = LocalTransport(["hrworks-worker", "--stdio"])
+    transport = LocalTransport(["hrworks", "worker", "--stdio"])
     async with WorkerClient(settings, transport=transport) as client:
         result = await authenticate(client, settings)
         if result.get("mfa_required"):

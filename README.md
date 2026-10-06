@@ -66,17 +66,16 @@ Chromium and SSH must already be configured on the browser host. The worker uses
 can override it. Login cookies are runtime state and never go into the Nix store.
 
 The fnuc deployment provides `hrworks-worker-browserless` and
-`hrworks-worker-steel` as alternate remote worker executables. Select one in the
-integration's **Remote worker executable** field to compare the local Browserless
-and Steel browser backends; `hrworks-worker` continues to use the configured CDP
-endpoint. Steel sessions are created for a worker connection and released when it
-closes.
+`hrworks-worker-steel` as alternate remote worker commands. Select one in the
+integration's **Remote worker command** field to compare the local Browserless
+and Steel browser backends. The regular CLI also exposes the worker as
+`hrworks worker`; Steel sessions are released when the command closes.
 
 1. Add this repository as an **Integration** repository in HACS, or install
    `custom_components/hrworks` using your existing submodule and symlink workflow.
 2. Restart HA and add **HR WORKS** under Settings → Devices & services.
 3. Enter the SSH host, port and username, the key file path **inside HA**, and a
-   verified `known_hosts` entry. The remote executable defaults to `hrworks-worker`;
+   verified `known_hosts` entry. The remote worker command defaults to `hrworks worker`;
    an absolute executable path is also supported.
 4. Enter your employee company ID, user ID and password. If MFA is requested, a
    saved TOTP URI is tried automatically; enter a one-time code on the same form

@@ -13,7 +13,6 @@ license = "MIT"
 [project.scripts]
 hrworks = "hrworks.cli:main"
 hr-works = "hrworks.cli:main"
-hrworks-worker = "hrworks_worker.server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["hrworks_worker", "custom_components/hrworks/hrworks"]

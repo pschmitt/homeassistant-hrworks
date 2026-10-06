@@ -11,7 +11,7 @@
           "ssh_username": "SSH username",
           "ssh_key_path": "SSH private key file in Home Assistant",
           "ssh_known_hosts": "SSH known_hosts entry",
-          "worker_command": "Remote worker executable",
+          "worker_command": "Remote worker command",
           "name": "Device name"
         }
       },
@@ -24,7 +24,7 @@
           "ssh_username": "SSH username",
           "ssh_key_path": "SSH private key file in Home Assistant",
           "ssh_known_hosts": "SSH known_hosts entry",
-          "worker_command": "Remote worker executable",
+          "worker_command": "Remote worker command",
           "name": "Device name"
         }
       },

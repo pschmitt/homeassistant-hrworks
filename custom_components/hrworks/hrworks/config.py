@@ -24,7 +24,7 @@ ENV_KEYS = {
     "HRWORKS_RBW_ENTRY": "rbw_entry",
 }
 SECRETS = {"password", "totp_uri"}
-DEFAULTS = {"transport": "local", "worker_command": "hrworks-worker", "timezone": "Europe/Berlin"}
+DEFAULTS = {"transport": "local", "worker_command": "hrworks worker", "timezone": "Europe/Berlin"}
 
 
 def default_path() -> Path:

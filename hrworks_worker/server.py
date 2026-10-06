@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import asyncio
 import json
 import logging
@@ -246,31 +245,25 @@ async def serve(worker: Worker) -> None:
         await worker.close()
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="HR WORKS employee browser worker over SSH")
-    parser.add_argument("--stdio", action="store_true", required=True)
-    parser.add_argument("--cdp-url", default="http://127.0.0.1:9222")
-    parser.add_argument("--browser-backend", choices=("cdp", "steel"), default="cdp")
-    parser.add_argument("--steel-api-url", default="http://127.0.0.1:3002")
-    parser.add_argument(
-        "--state-dir", type=Path, default=Path.home() / ".local/state/hrworks-worker"
-    )
-    parser.add_argument("--enable-writes", action="store_true")
-    args = parser.parse_args()
+def run_worker(
+    *,
+    cdp_url: str,
+    backend: str,
+    steel_api_url: str,
+    state_dir: Path,
+    enable_writes: bool,
+) -> None:
+    """Run the browser worker's JSON-line protocol."""
     os.umask(0o077)
-    args.state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     asyncio.run(
         serve(
             Worker(
-                args.cdp_url,
-                args.state_dir,
-                args.enable_writes,
-                args.browser_backend,
-                args.steel_api_url,
+                cdp_url,
+                state_dir,
+                enable_writes,
+                backend,
+                steel_api_url,
             )
         )
     )
-
-
-if __name__ == "__main__":
-    main()

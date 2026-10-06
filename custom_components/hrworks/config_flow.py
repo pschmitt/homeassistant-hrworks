@@ -65,7 +65,7 @@ def connection_schema(defaults: dict, *, existing: bool = False) -> vol.Schema:
                 CONF_SSH_KNOWN_HOSTS, default=defaults.get(CONF_SSH_KNOWN_HOSTS, "")
             ): TextSelector(TextSelectorConfig(multiline=True)),
             vol.Required(
-                CONF_WORKER_COMMAND, default=defaults.get(CONF_WORKER_COMMAND, "hrworks-worker")
+                CONF_WORKER_COMMAND, default=defaults.get(CONF_WORKER_COMMAND, "hrworks worker")
             ): TextSelector(),
             vol.Optional(CONF_NAME, default=defaults.get(CONF_NAME, "HR WORKS")): TextSelector(),
         }

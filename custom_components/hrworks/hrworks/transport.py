@@ -133,7 +133,9 @@ class SshTransport(Transport):
                 keepalive_interval=30,
                 keepalive_count_max=3,
             )
-            command = shlex.join([self.settings.get("worker_command", "hrworks-worker"), "--stdio"])
+            command = shlex.join(
+                [*shlex.split(self.settings.get("worker_command", "hrworks worker")), "--stdio"]
+            )
             self.process = await self.connection.create_process(command, stderr=asyncssh.DEVNULL)
         except asyncssh.HostKeyNotVerifiable:
             await self.close()
@@ -171,7 +173,7 @@ class LocalTransport(Transport):
 
     def __init__(self, command: list[str] | None = None, **kwargs):
         super().__init__(**kwargs)
-        self.command = command or ["hrworks-worker", "--stdio"]
+        self.command = command or ["hrworks", "worker", "--stdio"]
         self.process = None
 
     async def exchange(self, message: str) -> str:

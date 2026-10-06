@@ -7,37 +7,32 @@ flake:
 }:
 let
   cfg = config.programs.hrworksWorker;
-  cliCommands =
-    map
-      (
-        name:
-        pkgs.writeShellApplication {
-          inherit name;
-          text = ''
-            exec ${cfg.package}/bin/hrworks "$@"
-          '';
-        }
-      )
-      [
-        "hrworks"
-        "hr-works"
-      ];
-  command = pkgs.writeShellApplication {
-    name = "hrworks-worker";
-    text = ''
-      exec ${lib.getExe' cfg.package "hrworks-worker"} ${
-        lib.escapeShellArgs (
-          [
-            "--cdp-url"
-            cfg.cdpUrl
-          ]
-          ++ lib.optionals (cfg.stateDirectory != null) [
-            "--state-dir"
-            cfg.stateDirectory
-          ]
-          ++ lib.optional cfg.enableWrites "--enable-writes"
-        )
-      } "$@"
+  configuredPackage = pkgs.symlinkJoin {
+    name = "hrworks-configured";
+    paths = [ cfg.package ];
+    postBuild = ''
+      rm "$out/bin/hrworks"
+      cat > "$out/bin/hrworks" <<'EOF'
+      #!${pkgs.bash}/bin/bash
+      if [[ "''${1:-}" == worker ]]; then
+        shift
+        exec ${cfg.package}/bin/hrworks worker ${
+          lib.escapeShellArgs (
+            [
+              "--cdp-url"
+              cfg.cdpUrl
+            ]
+            ++ lib.optionals (cfg.stateDirectory != null) [
+              "--state-dir"
+              cfg.stateDirectory
+            ]
+            ++ lib.optional cfg.enableWrites "--enable-writes"
+          )
+        } "$@"
+      fi
+      exec ${cfg.package}/bin/hrworks "$@"
+      EOF
+      chmod 755 "$out/bin/hrworks"
     '';
   };
 in
@@ -67,6 +62,6 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    environment.systemPackages = [ command ] ++ cliCommands;
+    environment.systemPackages = [ configuredPackage ];
   };
 }

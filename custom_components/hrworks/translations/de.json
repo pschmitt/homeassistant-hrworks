@@ -11,7 +11,7 @@
           "ssh_username": "SSH-Benutzername",
           "ssh_key_path": "SSH-Schlüsseldatei in Home Assistant",
           "ssh_known_hosts": "SSH-known_hosts-Eintrag",
-          "worker_command": "Worker-Programm auf dem SSH-Host",
+          "worker_command": "Worker-Befehl auf dem SSH-Host",
           "name": "Gerätename"
         }
       },
@@ -24,7 +24,7 @@
           "ssh_username": "SSH-Benutzername",
           "ssh_key_path": "SSH-Schlüsseldatei in Home Assistant",
           "ssh_known_hosts": "SSH-known_hosts-Eintrag",
-          "worker_command": "Worker-Programm auf dem SSH-Host",
+          "worker_command": "Worker-Befehl auf dem SSH-Host",
           "name": "Gerätename"
         }
       },
