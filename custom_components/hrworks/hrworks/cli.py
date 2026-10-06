@@ -28,7 +28,7 @@ from .config import ConfigStore, credentials, redacted
 from .models import TYPE_LABELS, calendar_ics, duration, import_csv, interval
 from .output import emit
 from .totp import InvalidTotp, parameters
-from .transport import LocalTransport, WorkerError
+from .transport import LocalTransport, OpenSshTransport, WorkerError
 
 app = typer.Typer(
     help="HR WORKS employee tools · pretty TSV in terminals, plain TSV in pipes.",
@@ -112,6 +112,8 @@ class Runtime:
             if not settings.get("ssh_host"):
                 raise WorkerError("invalid_config")
             return WorkerClient(settings)
+        if settings.get("transport") == "openssh":
+            return WorkerClient(settings, transport=OpenSshTransport(settings))
         if settings.get("transport") != "local":
             raise WorkerError("invalid_config")
         command = shlex.split(settings.get("worker_command", "hrworks worker")) + ["--stdio"]
@@ -669,10 +671,16 @@ def config_list(ctx: typer.Context):
 @config_app.command("init")
 def config_init(
     ctx: typer.Context,
-    transport: Annotated[str, typer.Option(help="local or ssh")] = "local",
+    transport: Annotated[
+        str,
+        typer.Option(
+            help="local, ssh (built-in client, strict known hosts) or openssh "
+            "(system ssh; honours ~/.ssh/config)"
+        ),
+    ] = "local",
     ssh_host: str | None = None,
     ssh_username: str | None = None,
-    ssh_port: int = 22,
+    ssh_port: int | None = None,
     ssh_key: Path | None = None,
     known_hosts: Path | None = None,
     rbw_entry: str | None = None,
@@ -693,10 +701,11 @@ def config_init(
     except ZoneInfoNotFoundError:
         raise WorkerError("invalid_config") from None
     if (
-        transport not in {"local", "ssh"}
-        or transport == "ssh"
+        transport not in {"local", "ssh", "openssh"}
+        or transport in {"ssh", "openssh"}
         and not ssh_host
-        or not 1 <= ssh_port <= 65535
+        or ssh_port is not None
+        and not 1 <= ssh_port <= 65535
     ):
         raise WorkerError("invalid_config")
     settings = {

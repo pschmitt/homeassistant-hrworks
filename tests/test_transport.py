@@ -4,7 +4,13 @@ import asyncio
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from hrworks.transport import SshTransport, Transport, WorkerError
+from hrworks.transport import (
+    OpenSshTransport,
+    SshTransport,
+    Transport,
+    WorkerError,
+    openssh_command,
+)
 from playwright.async_api import TimeoutError as PlaywrightTimeout
 
 from hrworks_worker.portal import EmployeePortal, PortalError
@@ -134,6 +140,51 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
                     connect.call_args.kwargs["agent_path"], () if expected == () else None
                 )
             await transport.close()
+
+    def test_openssh_command_defers_host_details_to_ssh_config(self):
+        self.assertEqual(
+            openssh_command({"ssh_host": "alias", "worker_command": "hrworks-worker-x"}),
+            ["ssh", "-q", "-o", "BatchMode=yes", "--", "alias", "hrworks-worker-x --stdio"],
+        )
+        self.assertEqual(
+            openssh_command(
+                {
+                    "ssh_host": "h",
+                    "ssh_port": 2222,
+                    "ssh_username": "u",
+                    "ssh_key_path": "/synthetic/key",
+                }
+            ),
+            [
+                "ssh", "-q", "-o", "BatchMode=yes", "-p", "2222", "-l", "u",
+                "-i", "/synthetic/key", "--", "h", "hrworks-worker --stdio",
+            ],
+        )  # fmt: skip
+
+    def test_openssh_command_rejects_option_like_or_missing_hosts(self):
+        for host in (None, "", "-oProxyCommand=synthetic"):
+            with self.assertRaises(WorkerError) as error:
+                openssh_command({"ssh_host": host})
+            self.assertEqual(error.exception.code, "invalid_config")
+
+    async def test_openssh_transport_round_trips_and_maps_ssh_failure(self):
+        settings = {"ssh_host": "synthetic"}
+        for argv, expected in [
+            (["sh", "-c", "read l; echo '{\"ok\": 1}'"], {"ok": 1}),
+            (["sh", "-c", "read l; exit 255"], "cannot_connect"),
+            (["sh", "-c", "read l; exit 3"], "incompatible_worker"),
+        ]:
+            with patch("hrworks.transport.openssh_command", return_value=argv):
+                transport = OpenSshTransport(settings, timeout=10)
+            try:
+                if isinstance(expected, dict):
+                    self.assertEqual(await transport.request("/x"), expected)
+                else:
+                    with self.assertRaises(WorkerError) as error:
+                        await transport.request("/x")
+                    self.assertEqual(error.exception.code, expected)
+            finally:
+                await transport.close()
 
     async def test_month_reads_reuse_only_the_requested_portal_route(self):
         page = MagicMock()

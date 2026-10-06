@@ -49,7 +49,20 @@ hrworks --profile work doctor
 hrworks --profile work auth login
 ```
 
-SSH reads `~/.ssh/known_hosts` and uses strict verification. To supply verified
+OpenSSH worker (workstations): `--transport openssh` runs the system `ssh` instead of
+the built-in client, so aliases, `ProxyCommand`/`ProxyJump`, `known_hosts` and the agent
+from `~/.ssh/config` apply. It is non-interactive (`BatchMode`) and never trusts a new host
+key. `--ssh-port`, `--ssh-username` and `--ssh-key` are only passed to `ssh` when set.
+
+```bash
+hrworks config init --transport openssh --ssh-host fnuc --rbw-entry hrworks.de \
+  --worker hrworks-worker-browserless
+```
+
+A failing `ssh` (exit status 255) is reported as `cannot_connect`. Home Assistant keeps
+the built-in client.
+
+The built-in SSH transport reads `~/.ssh/known_hosts` and uses strict verification. To supply verified
 keys explicitly, use `config init --known-hosts <file>`. It never accepts a host
 key automatically. `--worker` selects the remote worker command or local worker command.
 

@@ -168,6 +168,23 @@ class SshTransport(Transport):
             self.connection = None
 
 
+def openssh_command(settings: dict) -> list[str]:
+    """ssh(1) argv for a remote worker; ~/.ssh/config (aliases, ProxyCommand/ProxyJump,
+    known_hosts, agent) applies. Non-interactive: never prompts, never trusts new keys."""
+    host = settings.get("ssh_host")
+    if not isinstance(host, str) or not host or host.startswith("-"):
+        raise WorkerError("invalid_config")
+    command = ["ssh", "-q", "-o", "BatchMode=yes"]
+    if settings.get("ssh_port") is not None:
+        command += ["-p", str(int(settings["ssh_port"]))]
+    if settings.get("ssh_username"):
+        command += ["-l", str(settings["ssh_username"])]
+    if settings.get("ssh_key_path"):
+        command += ["-i", os.path.expanduser(str(settings["ssh_key_path"]))]
+    worker = shlex.join([settings.get("worker_command", "hrworks-worker"), "--stdio"])
+    return [*command, "--", host, worker]
+
+
 class LocalTransport(Transport):
     """Launch an installed worker locally. stderr is intentionally discarded."""
 
@@ -201,3 +218,22 @@ class LocalTransport(Transport):
             except TimeoutError:
                 process.kill()
                 await process.wait()
+
+
+class OpenSshTransport(LocalTransport):
+    """Run the worker through the system ssh client instead of the built-in SSH library."""
+
+    def __init__(self, settings: dict, **kwargs):
+        super().__init__(openssh_command(settings), **kwargs)
+
+    async def exchange(self, message: str) -> str:
+        line = await super().exchange(message)
+        if not line and self.process is not None:
+            try:
+                async with asyncio.timeout(5):
+                    code = await self.process.wait()
+            except TimeoutError:
+                code = None
+            if code == 255:  # ssh itself failed: host, route, key or host key
+                raise OSError("ssh failed")
+        return line
