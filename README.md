@@ -65,6 +65,13 @@ Chromium and SSH must already be configured on the browser host. The worker uses
 `~/.local/state/hrworks-worker` under the SSH user by default; `stateDirectory`
 can override it. Login cookies are runtime state and never go into the Nix store.
 
+The fnuc deployment provides `hrworks-worker-browserless` and
+`hrworks-worker-steel` as alternate remote worker executables. Select one in the
+integration's **Remote worker executable** field to compare the local Browserless
+and Steel browser backends; `hrworks-worker` continues to use the configured CDP
+endpoint. Steel sessions are created for a worker connection and released when it
+closes.
+
 1. Add this repository as an **Integration** repository in HACS, or install
    `custom_components/hrworks` using your existing submodule and symlink workflow.
 2. Restart HA and add **HR WORKS** under Settings → Devices & services.

@@ -11,6 +11,8 @@ import re
 import sys
 from datetime import date, datetime
 from pathlib import Path
+from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import async_playwright
@@ -22,22 +24,84 @@ LOGGER = logging.getLogger(__name__)
 
 
 class Worker:
-    def __init__(self, cdp_url: str, state_dir: Path, enable_writes: bool) -> None:
+    def __init__(
+        self,
+        cdp_url: str = "http://127.0.0.1:9222",
+        state_dir: Path | None = None,
+        enable_writes: bool = False,
+        backend: str = "cdp",
+        steel_api_url: str = "http://127.0.0.1:3002",
+    ) -> None:
         self.cdp_url = cdp_url
-        self.state_dir = state_dir
+        self.state_dir = state_dir or Path.home() / ".local/state/hrworks-worker"
         self.enable_writes = enable_writes
+        self.backend = backend
+        self.steel_api_url = steel_api_url.rstrip("/")
         self.playwright = None
         self.browser = None
+        self.steel_session_id: str | None = None
         self.profiles: dict[str, EmployeePortal] = {}
+
+    def _steel_request(self, path: str, *, payload: dict | None = None) -> dict:
+        data = json.dumps(payload or {}).encode() if payload is not None else None
+        request = Request(
+            f"{self.steel_api_url}{path}",
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=15) as response:
+                result = json.load(response)
+        except (OSError, TimeoutError, URLError, ValueError):
+            raise PortalError("browser_unavailable", 503) from None
+        if not isinstance(result, dict):
+            raise PortalError("browser_unavailable", 503)
+        return result
+
+    async def _create_steel_session(self) -> tuple[str, str]:
+        session = await asyncio.to_thread(
+            self._steel_request, "/v1/sessions", payload={"timeout": 3600000}
+        )
+        session_id = session.get("id")
+        websocket_url = session.get("websocketUrl") or session.get("websocket_url")
+        if not isinstance(session_id, str) or not isinstance(websocket_url, str):
+            if isinstance(session_id, str):
+                self.steel_session_id = session_id
+                await self._release_steel_session()
+            raise PortalError("browser_unavailable", 503)
+        self.steel_session_id = session_id
+        # Steel may report its container wildcard address; dial the same local
+        # published API port the worker used to create the session instead.
+        if "0.0.0.0" in websocket_url:
+            websocket_url = websocket_url.replace("0.0.0.0", "127.0.0.1")
+        return session_id, websocket_url
+
+    async def _release_steel_session(self) -> None:
+        session_id, self.steel_session_id = self.steel_session_id, None
+        if session_id:
+            try:
+                await asyncio.to_thread(self._steel_request, f"/v1/sessions/{session_id}/release")
+            except (PortalError, OSError, TimeoutError):
+                LOGGER.warning("Could not release Steel browser session")
 
     async def connect(self) -> None:
         if self.browser and self.browser.is_connected():
             return
+        if self.backend == "steel":
+            await self._release_steel_session()
         if self.playwright is None:
             self.playwright = await async_playwright().start()
-        self.browser = await self.playwright.chromium.connect_over_cdp(
-            self.cdp_url, no_defaults=True, timeout=15000
-        )
+        endpoint = self.cdp_url
+        if self.backend == "steel":
+            _, endpoint = await self._create_steel_session()
+        try:
+            self.browser = await self.playwright.chromium.connect_over_cdp(
+                endpoint, no_defaults=True, timeout=15000
+            )
+        except PlaywrightError:
+            await self._release_steel_session()
+            raise
         for portal in self.profiles.values():
             portal.browser = self.browser
             portal.context = portal.page = None
@@ -63,6 +127,8 @@ class Worker:
             # Disconnect our driver; never close Chromium or other users' contexts.
             if self.playwright:
                 await self.playwright.stop()
+                self.playwright = None
+            await self._release_steel_session()
 
     async def dispatch(self, path: str, data: dict | None) -> dict:
         if path == "health":
@@ -184,6 +250,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="HR WORKS employee browser worker over SSH")
     parser.add_argument("--stdio", action="store_true", required=True)
     parser.add_argument("--cdp-url", default="http://127.0.0.1:9222")
+    parser.add_argument("--browser-backend", choices=("cdp", "steel"), default="cdp")
+    parser.add_argument("--steel-api-url", default="http://127.0.0.1:3002")
     parser.add_argument(
         "--state-dir", type=Path, default=Path.home() / ".local/state/hrworks-worker"
     )
@@ -191,7 +259,17 @@ def main() -> None:
     args = parser.parse_args()
     os.umask(0o077)
     args.state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-    asyncio.run(serve(Worker(args.cdp_url, args.state_dir, args.enable_writes)))
+    asyncio.run(
+        serve(
+            Worker(
+                args.cdp_url,
+                args.state_dir,
+                args.enable_writes,
+                args.browser_backend,
+                args.steel_api_url,
+            )
+        )
+    )
 
 
 if __name__ == "__main__":

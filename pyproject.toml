@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "hrworks-employee"
-version = "2.1.0"
+version = "2.1.1"
 description = "HR WORKS employee library, Rich CLI and browser worker"
 requires-python = ">=3.12"
 dependencies = ["asyncssh>=2.14.2", "playwright==1.63.0", "rich>=13.9", "typer>=0.16"]
