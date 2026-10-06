@@ -5,3 +5,6 @@ format:
 
 lint:
     uvx ruff check .
+
+test:
+    python -m unittest discover -s tests -v
