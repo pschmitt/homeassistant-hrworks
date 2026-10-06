@@ -30,6 +30,11 @@ let
           )
         } "$@"
       fi
+      # The CLI starts its own `hrworks worker` from inside the package, bypassing
+      # this wrapper; HRWORKS_CDP_URL makes it pass --cdp-url to that worker.
+      if [[ -z "''${HRWORKS_CDP_URL:-}" ]]; then
+        export HRWORKS_CDP_URL=${lib.escapeShellArg cfg.cdpUrl}
+      fi
       exec ${cfg.package}/bin/hrworks "$@"
       EOF
       chmod 755 "$out/bin/hrworks"
