@@ -58,6 +58,26 @@ def normalize(value: str) -> str:
     return " ".join(value.replace("’", "'").split()).casefold().rstrip(":").strip()
 
 
+VIEWPORT = {"width": 1600, "height": 1000}
+
+
+async def ensure_viewport(page: Page) -> None:
+    """Make the page really render at VIEWPORT.
+
+    Some CDP browsers (Browserless) ignore Playwright's viewport emulation and render
+    at 800x600. The portal then switches to its off-canvas mobile layout, so menu
+    links count as outside the viewport and every click times out.
+    """
+    size = await page.evaluate("() => [innerWidth, innerHeight]")
+    if size == [VIEWPORT["width"], VIEWPORT["height"]]:
+        return
+    session = await page.context.new_cdp_session(page)
+    await session.send(
+        "Emulation.setDeviceMetricsOverride",
+        {**VIEWPORT, "deviceScaleFactor": 1, "mobile": False},
+    )
+
+
 class EmployeePortal:
     """An isolated context and serialized operations for one employee."""
 
@@ -81,11 +101,12 @@ class EmployeePortal:
             storage_state=str(self.state_path) if self.state_path.exists() and not fresh else None,
             locale="en-GB",
             timezone_id="Europe/Berlin",
-            viewport={"width": 1600, "height": 1000},
+            viewport=VIEWPORT,
             accept_downloads=False,
             service_workers="block",
         )
         self.page = await self.context.new_page()
+        await ensure_viewport(self.page)
         self.page.set_default_timeout(20000)
         return self.page
 

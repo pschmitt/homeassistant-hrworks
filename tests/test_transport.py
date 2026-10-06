@@ -13,7 +13,7 @@ from hrworks.transport import (
 )
 from playwright.async_api import TimeoutError as PlaywrightTimeout
 
-from hrworks_worker.portal import EmployeePortal, PortalError
+from hrworks_worker.portal import EmployeePortal, PortalError, ensure_viewport
 
 
 class FakeTransport(Transport):
@@ -194,6 +194,21 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(error.exception.code, expected)
             finally:
                 await transport.close()
+
+    async def test_viewport_is_forced_when_the_browser_ignores_emulation(self):
+        for size, overrides in [([800, 600], 1), ([1600, 1000], 0)]:
+            page = MagicMock()
+            page.evaluate = AsyncMock(return_value=size)
+            session = MagicMock()
+            session.send = AsyncMock()
+            page.context.new_cdp_session = AsyncMock(return_value=session)
+            await ensure_viewport(page)
+            self.assertEqual(session.send.await_count, overrides)
+            if overrides:
+                session.send.assert_awaited_with(
+                    "Emulation.setDeviceMetricsOverride",
+                    {"width": 1600, "height": 1000, "deviceScaleFactor": 1, "mobile": False},
+                )
 
     async def test_month_reads_reuse_only_the_requested_portal_route(self):
         page = MagicMock()
