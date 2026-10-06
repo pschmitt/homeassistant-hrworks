@@ -181,7 +181,7 @@ def openssh_command(settings: dict) -> list[str]:
         command += ["-l", str(settings["ssh_username"])]
     if settings.get("ssh_key_path"):
         command += ["-i", os.path.expanduser(str(settings["ssh_key_path"]))]
-    worker = shlex.join([settings.get("worker_command", "hrworks-worker"), "--stdio"])
+    worker = shlex.join([*shlex.split(settings.get("worker_command", "hrworks worker")), "--stdio"])
     return [*command, "--", host, worker]
 
 

@@ -55,8 +55,7 @@ from `~/.ssh/config` apply. It is non-interactive (`BatchMode`) and never trusts
 key. `--ssh-port`, `--ssh-username` and `--ssh-key` are only passed to `ssh` when set.
 
 ```bash
-hrworks config init --transport openssh --ssh-host fnuc --rbw-entry hrworks.de \
-  --worker hrworks-worker-browserless
+hrworks config init --transport openssh --ssh-host fnuc --rbw-entry hrworks.de
 ```
 
 A failing `ssh` (exit status 255) is reported as `cannot_connect`. Home Assistant keeps

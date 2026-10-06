@@ -146,6 +146,15 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
             openssh_command({"ssh_host": "alias", "worker_command": "hrworks-worker-x"}),
             ["ssh", "-q", "-o", "BatchMode=yes", "--", "alias", "hrworks-worker-x --stdio"],
         )
+        # A multi-word worker command stays multi-word for the remote shell.
+        self.assertEqual(
+            openssh_command({"ssh_host": "alias"})[-1],
+            "hrworks worker --stdio",
+        )
+        self.assertEqual(
+            openssh_command({"ssh_host": "alias", "worker_command": "hrworks worker --x 1"})[-1],
+            "hrworks worker --x 1 --stdio",
+        )
         self.assertEqual(
             openssh_command(
                 {
@@ -157,7 +166,7 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
             ),
             [
                 "ssh", "-q", "-o", "BatchMode=yes", "-p", "2222", "-l", "u",
-                "-i", "/synthetic/key", "--", "h", "hrworks-worker --stdio",
+                "-i", "/synthetic/key", "--", "h", "hrworks worker --stdio",
             ],
         )  # fmt: skip
 
