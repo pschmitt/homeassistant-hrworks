@@ -19,15 +19,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: HrworksConfigEntry) -> b
         create_issue(hass, entry, "write_uncertain")
     client = WorkerClient(hass, entry.data)
     coordinator = HrworksCoordinator(hass, entry, client)
-    try:
-        await coordinator.async_config_entry_first_refresh()
-    except Exception:
-        await client.close()
-        raise
     entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_reload))
     register_services(hass)
+    # The first snapshot drives a remote browser worker and can take a minute.
+    # Home Assistant's startup waits for every integration's setup, so fetch it
+    # in the background; entities stay unavailable until it completes. Auth
+    # failures still start the reauth flow from the coordinator.
+    entry.async_create_background_task(
+        hass, coordinator.async_refresh(), f"{DOMAIN} first refresh"
+    )
     return True
 
 
