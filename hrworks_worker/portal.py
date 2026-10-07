@@ -23,8 +23,30 @@ from playwright.async_api import TimeoutError as PlaywrightTimeout
 
 BERLIN = ZoneInfo("Europe/Berlin")
 LOGIN_URL = "https://ssl6.hrworks.de/o/dashboard"
-TIME_RE = re.compile(r"^([+-]?)(\d+):(\d{2})(?:\s*(?:Hours|hours|Stunden))?$")
+TIME_RE = re.compile(r"^([+−-]?)(\d+):(\d{2})(?:\s*(?:Hours|hours|Stunden))?$")
 DATE_RE = re.compile(r"\b(\d{2})\.(\d{2})\.(\d{4}|\d{2})\b")
+PAIR_RE = re.compile(r"(.+?)\s*\((.+)\)")
+ACCOUNT_LABELS = {
+    "target hours": "monthly_target",
+    "sollstunden": "monthly_target",
+    "working hours": "monthly_worked",
+    "arbeitsstunden": "monthly_worked",
+    "time credit": "time_credit",
+    "zeitgutschrift": "time_credit",
+    "end of month balance": "monthly_balance",
+    "monatssaldo": "monthly_balance",
+    "transferred from previous month": "carryover",
+    "übertrag aus vormonat": "carryover",
+    "absences": "absence_deduction",
+    "abwesenheiten": "absence_deduction",
+    "total balance": "total_balance",
+    "gesamtsaldo": "total_balance",
+}
+PREVIOUS_DAY_LABELS = {
+    "monthly balance to the previous day": "monthly_balance",
+    "total balance to the previous day": "total_balance",
+}
+BALANCES = {"monthly_balance", "total_balance"}
 
 
 class PortalError(Exception):
@@ -44,7 +66,7 @@ def minutes(value: str) -> int | None:
     match = TIME_RE.fullmatch(" ".join(value.split()))
     if not match or int(match[3]) >= 60:
         return None
-    return (-1 if match[1] == "-" else 1) * (int(match[2]) * 60 + int(match[3]))
+    return (-1 if match[1] in {"-", "−"} else 1) * (int(match[2]) * 60 + int(match[3]))
 
 
 def dates(value: str) -> list[date]:
@@ -56,6 +78,37 @@ def dates(value: str) -> list[date]:
 
 def normalize(value: str) -> str:
     return " ".join(value.replace("’", "'").split()).casefold().rstrip(":").strip()
+
+
+def account_metrics(rows: list[list[str]]) -> tuple[dict, str]:
+    """Map time-account rows; values the portal does not show stay absent.
+
+    Rows such as "Recorded hours (Working hours)" / "33:44 (33:35)" carry two
+    values. Previous-day balances replace end-of-month projections, and a
+    balance is never mixed across both bases.
+    """
+    current, previous = {}, {}
+    for label, value in rows:
+        labels, values = PAIR_RE.fullmatch(label.strip()), PAIR_RE.fullmatch(value.strip())
+        pairs = (
+            [(labels[1], values[1]), (labels[2], values[2])]
+            if labels and values
+            else [(label, value)]
+        )
+        for name, text in pairs:
+            parsed = minutes(text)
+            if parsed is None:
+                continue
+            if key := PREVIOUS_DAY_LABELS.get(normalize(name)):
+                previous[key] = parsed
+            elif key := ACCOUNT_LABELS.get(normalize(name)):
+                current[key] = parsed
+    if not previous:
+        return current, "end_of_month"
+    return {
+        **{k: v for k, v in current.items() if k not in BALANCES},
+        **previous,
+    }, "previous_day"
 
 
 VIEWPORT = {"width": 1600, "height": 1000}
@@ -325,35 +378,9 @@ class EmployeePortal:
         rows = await page.locator("div.row").evaluate_all(r"""es => es
             .filter(e => e.checkVisibility() && e.children.length === 2)
             .map(e => [...e.children].map(c => c.innerText.trim()))
-            .filter(a => a[0].length < 90 && /^[+-]?\d+:\d{2}\s/.test(a[1]))""")
-        labels = {
-            "target hours": "monthly_target",
-            "sollstunden": "monthly_target",
-            "working hours": "monthly_worked",
-            "arbeitsstunden": "monthly_worked",
-            "time credit": "time_credit",
-            "zeitgutschrift": "time_credit",
-            "end of month balance": "monthly_balance",
-            "monatssaldo": "monthly_balance",
-            "monthly balance to the previous day": "monthly_balance",
-            "transferred from previous month": "carryover",
-            "übertrag aus vormonat": "carryover",
-            "absences": "absence_deduction",
-            "abwesenheiten": "absence_deduction",
-            "total balance": "total_balance",
-            "gesamtsaldo": "total_balance",
-            "total balance to the previous day": "total_balance",
-        }
-        result = {}
-        balance_basis = "end_of_month"
-        for label, value in rows:
-            key = labels.get(normalize(label))
-            parsed = minutes(value)
-            if key and parsed is not None:
-                result[key] = parsed
-                if "previous day" in normalize(label):
-                    balance_basis = "previous_day"
-        if "total_balance" not in result or "monthly_worked" not in result:
+            .filter(a => a[0].length < 90 && /^[+−-]?\d+:\d{2}(\s|$)/.test(a[1]))""")
+        result, balance_basis = account_metrics(rows)
+        if not result:
             raise PortalError("portal_changed", 502)
         return result, {
             "period": period,
