@@ -7,7 +7,7 @@ name = "hrworks-employee"
 version = "2.1.2"
 description = "HR WORKS employee library, Rich CLI and browser worker"
 requires-python = ">=3.12"
-dependencies = ["asyncssh>=2.14.2", "playwright==1.63.0", "rich>=13.9", "typer>=0.16"]
+dependencies = ["asyncssh>=2.14.2", "playwright==1.64.1", "rich>=13.9", "typer>=0.16"]
 license = "MIT"
 
 [project.scripts]
