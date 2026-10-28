@@ -24,6 +24,7 @@ from playwright.async_api import TimeoutError as PlaywrightTimeout
 
 BERLIN = ZoneInfo("Europe/Berlin")
 LOGIN_URL = "https://ssl6.hrworks.de/o/dashboard"
+LOGIN_STEP_TIMEOUT = 15000
 TIME_RE = re.compile(r"^([+−-]?)(\d+):(\d{2})(?:\s*(?:Hours|hours|Stunden))?$")
 DATE_RE = re.compile(r"\b(\d{2})\.(\d{2})\.(\d{4}|\d{2})\b")
 PAIR_RE = re.compile(r"(.+?)\s*\((.+)\)")
@@ -310,14 +311,16 @@ class EmployeePortal:
             await page.wait_for_function(
                 """() => {
                     const { hostname, pathname } = location;
-                    return pathname.includes('2fa-selection')
-                        || pathname.includes('2fa-totp')
+                    return pathname.includes('2fa')
                         || (hostname !== 'login.hrworks.de' && pathname.startsWith('/o/'));
                 }""",
-                timeout=15000,
+                timeout=LOGIN_STEP_TIMEOUT,
             )
         except PlaywrightTimeout:
-            raise PortalError("invalid_auth", 403) from None
+            # A rejected login re-renders the form; anything else is an unknown wait.
+            if await page.locator("input[type=password]:visible").count():
+                raise PortalError("invalid_auth", 403) from None
+            raise PortalError("login_timeout", 504) from None
         if "2fa-selection" in page.url:
             authenticator = page.get_by_text("Authenticator", exact=True)
             if not await authenticator.count():
@@ -327,10 +330,13 @@ class EmployeePortal:
         if "2fa-totp" in page.url:
             self.mfa_started = datetime.now(BERLIN)
             return {"profile_id": self.identity, "mfa_required": True}
+        if "2fa" in urlsplit(page.url).path:
+            # Any other second-factor step (another method or its setup) needs a person.
+            raise PortalError("unsupported_mfa", 403)
         if not await self._authenticated_portal_ready():
             if "login.hrworks.de" in page.url:
                 raise PortalError("session_expired", 403)
-            raise PortalError("unsupported_mfa", 403)
+            raise PortalError("login_timeout", 504)
         await self.save_session()
         return {"profile_id": self.identity, "authenticated": True}
 

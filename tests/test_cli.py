@@ -185,6 +185,30 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertNotIn("profile_id", self.store.read()["profiles"]["default"])
 
+    def test_login_failures_name_their_cause(self):
+        self.store.save(
+            "default",
+            {
+                "transport": "local",
+                "worker_command": str(self.worker),
+                "company_id": "example",
+                "username": "invented",
+                "password": "synthetic-password",
+            },
+        )
+        for code, status, hint in [
+            ("unsupported_mfa", 1, "Set up Authenticator (TOTP)"),
+            ("login_timeout", 1, "did not reach a known login step"),
+            ("invalid_auth", 3, "Check your credentials"),
+        ]:
+            with self.subTest(code=code):
+                self.env["HRWORKS_TEST_LOGIN_ERROR"] = code
+                result = self.cli("auth", "login", "--force", "--json")
+                self.assertEqual(result.returncode, status, result.stdout)
+                error = json.loads(result.stdout)["error"]
+                self.assertEqual(error["code"], code)
+                self.assertIn(hint, error["message"])
+
     def test_calendar_export(self):
         output = Path(self.directory.name) / "leave.ics"
         result = self.cli(

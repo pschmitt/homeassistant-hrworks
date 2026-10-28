@@ -18,6 +18,8 @@ for line in sys.stdin:
             "writes_enabled": not os.environ.get("HRWORKS_TEST_NO_WRITES"),
             "capabilities": ["fresh_login", "day", "account", "logout"],
         }
+    elif path == "login" and (error := os.environ.get("HRWORKS_TEST_LOGIN_ERROR")):
+        result = {"error": error}
     elif path == "login":
         result = {
             "profile_id": "a" * 64,

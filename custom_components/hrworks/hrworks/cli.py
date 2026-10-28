@@ -58,7 +58,8 @@ for name, group in [
 
 ERROR_MESSAGES = {
     "cache_unavailable": "Cannot access the private read cache. Check HRWORKS_CACHE_DIR permissions or remove a damaged cache database.",
-    "unsupported_mfa": "This employee login needs an unsupported second factor. Use authenticator TOTP.",
+    "unsupported_mfa": "HR WORKS asks for a second factor that this login cannot complete. Set up Authenticator (TOTP) as your second factor in HR WORKS, then log in again.",
+    "login_timeout": "HR WORKS did not reach a known login step in time. Try again later; if it persists, check the portal in a browser.",
     "busy": "The worker is busy. Try again shortly.",
     "not_found": "Session or operation not found. Authenticate again or update the worker.",
     "invalid_request": "The worker rejected the request. Check input and update the client and worker together.",

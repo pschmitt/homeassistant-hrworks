@@ -16,6 +16,7 @@ ERRORS = {
     "mfa_required",
     "invalid_code",
     "unsupported_mfa",
+    "login_timeout",
     "session_expired",
     "portal_changed",
     "browser_unavailable",
