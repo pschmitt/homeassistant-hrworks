@@ -5,7 +5,6 @@ from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.hrworks.api import WorkerClient, WorkerError
@@ -172,7 +171,7 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
         coordinator = self.coordinator()
         coordinator.client.snapshot.side_effect = WorkerError("session_expired")
         with patch("custom_components.hrworks.coordinator.create_issue") as issue:
-            with self.assertRaises(ConfigEntryAuthFailed):
+            with self.assertRaises(UpdateFailed):
                 await coordinator._async_update_data()
         self.assertEqual(coordinator.client.snapshot.await_count, 2)
         coordinator.client.login.assert_awaited_once()
@@ -182,7 +181,7 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
         coordinator = self.coordinator(uri=False)
         coordinator.client.snapshot.side_effect = WorkerError("session_expired")
         with patch("custom_components.hrworks.coordinator.create_issue"):
-            with self.assertRaises(ConfigEntryAuthFailed):
+            with self.assertRaises(UpdateFailed):
                 await coordinator._async_update_data()
         coordinator.client.login.assert_not_awaited()
 

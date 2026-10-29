@@ -72,8 +72,6 @@ async def _async_register_card(hass: HomeAssistant, url: str) -> None:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: HrworksConfigEntry) -> bool:
-    # Remove the legacy duplicate login repair; ConfigEntryAuthFailed owns reauth now.
-    ir.async_delete_issue(hass, DOMAIN, f"{entry.entry_id}_session_expired")
     if ir.async_get(hass).async_get_issue(DOMAIN, f"{entry.entry_id}_write_uncertain"):
         create_issue(hass, entry, "write_uncertain")
     client = WorkerClient(hass, entry.data)
@@ -85,7 +83,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: HrworksConfigEntry) -> b
     # The first snapshot drives a remote browser worker and can take a minute.
     # Home Assistant's startup waits for every integration's setup, so fetch it
     # in the background; entities stay unavailable until it completes. Auth
-    # failures still start the reauth flow from the coordinator.
+    # auth failures create a Repairs issue without blocking startup.
     entry.async_create_background_task(hass, coordinator.async_refresh(), f"{DOMAIN} first refresh")
     return True
 

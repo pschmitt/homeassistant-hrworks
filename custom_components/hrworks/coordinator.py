@@ -8,7 +8,6 @@ import time
 from datetime import date, datetime, timedelta
 
 from homeassistant.const import CONF_SCAN_INTERVAL
-from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -169,7 +168,8 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
                     "HR WORKS refresh still requires authentication (error=%s); raising repair",
                     err.code,
                 )
-                raise ConfigEntryAuthFailed("Employee session needs authentication") from err
+                create_issue(self.hass, self.entry, "session_expired")
+                raise UpdateFailed(err.code) from err
             key = (
                 "portal_changed"
                 if err.code == "portal_changed"
