@@ -169,7 +169,6 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
                     "HR WORKS refresh still requires authentication (error=%s); raising repair",
                     err.code,
                 )
-                create_issue(self.hass, self.entry, "session_expired")
                 raise ConfigEntryAuthFailed("Employee session needs authentication") from err
             key = (
                 "portal_changed"

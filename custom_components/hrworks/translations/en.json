@@ -194,46 +194,6 @@
     }
   },
   "issues": {
-    "session_expired": {
-      "title": "Employee login needed",
-      "fix_flow": {
-        "step": {
-          "login": {
-            "title": "Sign in again",
-            "description": "Continue with the saved employee login. A saved TOTP URI is tried automatically. Enter a six-digit code if needed, or replace the URI here.",
-            "data": {
-              "password": "Password",
-              "totp_uri": "TOTP URI (optional)",
-              "clear_totp": "Remove saved TOTP URI",
-              "code": "Authenticator code (optional)"
-            }
-          }
-        },
-        "error": {
-          "worker_auth": "SSH authentication failed. Check the username and private key file.",
-          "cannot_connect": "Cannot reach the SSH host or worker. Check SSH access and the installed Nix package.",
-          "browser_unavailable": "The worker cannot reach its browser. Check the browser service.",
-          "incompatible_worker": "The worker protocol is incompatible. Update the integration and worker together.",
-          "invalid_auth": "Login failed. Check the company ID, user ID and password.",
-          "invalid_code": "The authenticator code was rejected or the challenge expired. Try a fresh code, or restart authentication.",
-          "unsupported_mfa": "This login requires an unsupported second factor or interactive challenge. Use an authenticator-enabled employee login.",
-          "session_expired": "The employee session expired. Authenticate again.",
-          "mfa_required": "Enter a current authenticator code.",
-          "different_account": "This entry belongs to a different employee. Add another integration entry for a different account.",
-          "portal_changed": "The portal could not be read reliably. Check for portal changes and update the worker.",
-          "busy": "The browser worker is busy. Try again shortly.",
-          "not_found": "The employee session was not found. Start authentication again.",
-          "invalid_request": "The worker rejected this request. Update the integration and worker together.",
-          "unknown": "An unexpected error occurred.",
-          "ssh_host_key": "SSH host key verification failed. Verify the host and reconfigure the known_hosts entry.",
-          "invalid_totp": "Invalid TOTP URI. Use otpauth://totp/... with a Base32 secret and six digits."
-        },
-        "abort": {
-          "entry_removed": "The integration entry was removed.",
-          "different_account": "This entry belongs to a different employee. Add another integration entry for a different account."
-        }
-      }
-    },
     "worker_auth": {
       "title": "SSH authentication needs attention",
       "description": "SSH authentication for {name} failed. Reconfigure the username and private key file."
