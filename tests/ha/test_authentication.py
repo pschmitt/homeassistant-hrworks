@@ -146,6 +146,7 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
         coordinator.hass = MagicMock()
         coordinator.hass.data = {}
         coordinator.last_error = None
+        coordinator._auth_recovery_blocked = False
         coordinator._normal_update_interval = timedelta(minutes=15)
         coordinator.update_interval = coordinator._normal_update_interval
         coordinator._work_days = AsyncMock(return_value=[])

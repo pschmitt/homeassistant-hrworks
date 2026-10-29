@@ -66,6 +66,7 @@ ERROR_MESSAGES = {
     "ssh_host_key": "SSH host key verification failed. Verify the host before trusting its key.",
     "worker_auth": "SSH authentication failed. Check the key and username.",
     "invalid_auth": "Employee login failed. Check your credentials.",
+    "login_timeout": "Employee login timed out. Check the HR WORKS portal and try again.",
     "mfa_required": "MFA is required. Run hrworks auth login interactively or configure a TOTP URI.",
     "session_expired": "Session expired. Run hrworks auth login or configure credentials for automatic recovery.",
     "invalid_code": "Authenticator code rejected. Try a fresh code.",

@@ -192,10 +192,12 @@ prefilled into forms, included in diagnostics, or sent to the browser worker.
 Only the generated one-time code crosses SSH. Protect Home Assistant backups
 as you would your password manager.
 
-With a URI saved, an expired session gets one fresh login and one snapshot retry.
-If the portal rejects the generated code, the login form stays open for a manual
-code or an updated URI. A browser or connection failure discards the failed worker
-session. Home Assistant retries the read up to three times after the first attempt,
+With a URI saved, an expired session gets a fresh login and one snapshot retry.
+If the login response times out, HA retries the login after 1, 5, 15 and 30 minutes.
+After five failed attempts, automatic login pauses until the custom Repairs flow is
+completed. Authentication errors other than a login-response timeout go straight
+to Repairs. A browser or connection failure discards the failed worker session.
+Home Assistant retries the read up to three times after the first attempt,
 waiting three, six and then ten seconds between attempts, before scheduling recovery
 and polling every minute while those failures persist. Successful updates restore
 the configured polling interval and clear the worker repair. Working-time

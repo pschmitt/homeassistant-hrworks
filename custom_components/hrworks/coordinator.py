@@ -35,7 +35,7 @@ TRANSIENT_RETRY_DELAYS = (3, 6, 10)
 AUTO_RELOAD_COOLDOWN = 300
 RETRY_INTERVAL = timedelta(seconds=60)
 DAY_READS_TIMEOUT = 120
-LOGIN_RETRY_DELAYS = (5, 15)
+LOGIN_RETRY_DELAYS = (60, 300, 900, 1800)
 
 ISSUES = (
     "session_expired",
@@ -83,6 +83,7 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
         self.last_error_stage: str | None = None
         self.last_error_detail: str | None = None
         self.last_attempt: datetime | None = None
+        self._auth_recovery_blocked = False
         self._days_store = Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.days")
         self._days: dict | None = None
         # Operational counters for the diagnostic sensors (kept while HA runs).
@@ -213,6 +214,7 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
         self.last_error = None
         self.last_error_stage = None
         self.last_error_detail = None
+        self._auth_recovery_blocked = False
         self.consecutive_failures = 0
         self.update_interval = self._normal_update_interval
         entry_id = getattr(self.entry, "entry_id", "default")
@@ -248,13 +250,17 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
         return overview(today, self._days, events, data.get("metrics", {}))
 
     async def _snapshot_with_auth(self, payload: dict) -> dict:
-        """Recover an expired login once, including after worker replacement."""
+        """Recover an expired login, retrying only timed-out portal logins."""
         try:
             return await self.client.snapshot(payload)
         except WorkerError as err:
             if err.code not in {"session_expired", "mfa_required"}:
                 raise
+            if self._auth_recovery_blocked:
+                LOGGER.debug("HR WORKS automatic login retries exhausted; waiting for Repairs")
+                raise
             if not self.entry.data.get(CONF_TOTP_URI):
+                self._auth_recovery_blocked = True
                 LOGGER.warning(
                     "HR WORKS session requires authentication (error=%s); "
                     "automatic recovery skipped because no TOTP URI is saved",
@@ -271,10 +277,20 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
                 await authenticate(self.client, self.entry.data, force=True)
                 break
             except InvalidTotp:
+                self._auth_recovery_blocked = True
                 LOGGER.warning("HR WORKS automatic recovery could not parse the saved TOTP URI")
                 raise WorkerError("invalid_auth") from None
             except WorkerError as err:
                 if err.code != "login_timeout" or attempt == len(LOGIN_RETRY_DELAYS):
+                    if err.code in {
+                        "invalid_auth",
+                        "invalid_code",
+                        "mfa_required",
+                        "unsupported_mfa",
+                        "session_expired",
+                        "login_timeout",
+                    }:
+                        self._auth_recovery_blocked = True
                     stage = (
                         "MFA verification"
                         if err.code in {"invalid_code", "mfa_required", "unsupported_mfa"}
@@ -298,6 +314,8 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
         try:
             return await self.client.snapshot(payload)
         except WorkerError as err:
+            if err.code in {"session_expired", "mfa_required", "invalid_auth", "invalid_code"}:
+                self._auth_recovery_blocked = True
             LOGGER.warning(
                 "HR WORKS automatic recovery completed but data refresh failed (error=%s)",
                 err.code,
