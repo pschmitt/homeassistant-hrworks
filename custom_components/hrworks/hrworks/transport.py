@@ -13,6 +13,7 @@ import asyncssh
 
 ERRORS = {
     "invalid_auth",
+    "login_timeout",
     "mfa_required",
     "invalid_code",
     "unsupported_mfa",

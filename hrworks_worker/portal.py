@@ -317,7 +317,9 @@ class EmployeePortal:
                 timeout=15000,
             )
         except PlaywrightTimeout:
-            raise PortalError("invalid_auth", 403) from None
+            raise PortalError(
+                "login_timeout", 504, stage="browser_operation", detail="timeout"
+            ) from None
         if "2fa-selection" in page.url:
             authenticator = page.get_by_text("Authenticator", exact=True)
             if not await authenticator.count():

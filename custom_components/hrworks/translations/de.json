@@ -58,7 +58,8 @@
       "invalid_request": "Der Worker hat die Anfrage abgelehnt. Aktualisiere Integration und Worker zusammen.",
       "unknown": "Ein unerwarteter Fehler ist aufgetreten.",
       "ssh_host_key": "SSH-Hostschlüssel stimmt nicht mit dem bekannten Schlüssel überein. Host prüfen und Verbindung neu konfigurieren.",
-      "invalid_totp": "Ungültige TOTP-URI. Verwende otpauth://totp/... mit einem Base32-Geheimnis und sechs Stellen."
+      "invalid_totp": "Ungültige TOTP-URI. Verwende otpauth://totp/... mit einem Base32-Geheimnis und sechs Stellen.",
+      "login_timeout": "Die HR-WORKS-Anmeldung hat zu lange gedauert. Prüfe das Portal und versuche es erneut."
     },
     "abort": {
       "already_configured": "Dieses Mitarbeiterkonto ist bereits eingerichtet.",
@@ -217,7 +218,8 @@
           "invalid_request": "Der Worker hat die Anfrage abgelehnt. Aktualisiere Integration und Worker zusammen.",
           "unknown": "Ein unerwarteter Fehler ist aufgetreten.",
           "ssh_host_key": "SSH-Hostschlüssel stimmt nicht mit dem bekannten Schlüssel überein. Host prüfen und Verbindung neu konfigurieren.",
-          "invalid_totp": "Ungültige TOTP-URI. Verwende otpauth://totp/... mit einem Base32-Geheimnis und sechs Stellen."
+          "invalid_totp": "Ungültige TOTP-URI. Verwende otpauth://totp/... mit einem Base32-Geheimnis und sechs Stellen.",
+          "login_timeout": "Die HR-WORKS-Anmeldung hat zu lange gedauert. Prüfe das Portal und versuche es erneut."
         },
         "abort": {
           "entry_removed": "Der Integrationseintrag wurde entfernt.",

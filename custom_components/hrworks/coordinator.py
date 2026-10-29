@@ -35,6 +35,7 @@ TRANSIENT_RETRY_DELAYS = (3, 6, 10)
 AUTO_RELOAD_COOLDOWN = 300
 RETRY_INTERVAL = timedelta(seconds=60)
 DAY_READS_TIMEOUT = 120
+LOGIN_RETRY_DELAYS = (5, 15)
 
 ISSUES = (
     "session_expired",
@@ -163,7 +164,13 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
                 if err.code in TRANSIENT_ERRORS
                 else self._normal_update_interval
             )
-            if err.code in {"session_expired", "mfa_required", "invalid_auth", "invalid_code"}:
+            if err.code in {
+                "session_expired",
+                "mfa_required",
+                "invalid_auth",
+                "invalid_code",
+                "login_timeout",
+            }:
                 LOGGER.warning(
                     "HR WORKS refresh still requires authentication (error=%s); raising repair",
                     err.code,
@@ -259,21 +266,34 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
                 "trying automatic recovery with saved TOTP",
                 err.code,
             )
-        try:
-            await authenticate(self.client, self.entry.data, force=True)
-        except InvalidTotp:
-            LOGGER.warning("HR WORKS automatic recovery could not parse the saved TOTP URI")
-            raise WorkerError("invalid_auth") from None
-        except WorkerError as err:
-            stage = (
-                "MFA verification"
-                if err.code in {"invalid_code", "mfa_required", "unsupported_mfa"}
-                else "employee login"
-            )
-            LOGGER.warning(
-                "HR WORKS automatic recovery failed during %s (error=%s)", stage, err.code
-            )
-            raise
+        for attempt in range(len(LOGIN_RETRY_DELAYS) + 1):
+            try:
+                await authenticate(self.client, self.entry.data, force=True)
+                break
+            except InvalidTotp:
+                LOGGER.warning("HR WORKS automatic recovery could not parse the saved TOTP URI")
+                raise WorkerError("invalid_auth") from None
+            except WorkerError as err:
+                if err.code != "login_timeout" or attempt == len(LOGIN_RETRY_DELAYS):
+                    stage = (
+                        "MFA verification"
+                        if err.code in {"invalid_code", "mfa_required", "unsupported_mfa"}
+                        else "employee login"
+                    )
+                    LOGGER.warning(
+                        "HR WORKS automatic recovery failed during %s (error=%s)",
+                        stage,
+                        err.code,
+                    )
+                    raise
+                delay = LOGIN_RETRY_DELAYS[attempt]
+                LOGGER.warning(
+                    "HR WORKS login response timed out; retrying in %ss (attempt %s/%s)",
+                    delay,
+                    attempt + 2,
+                    len(LOGIN_RETRY_DELAYS) + 1,
+                )
+                await asyncio.sleep(delay)
         self.reauthentications += 1
         try:
             return await self.client.snapshot(payload)

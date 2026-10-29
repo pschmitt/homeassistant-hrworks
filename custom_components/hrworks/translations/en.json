@@ -58,7 +58,8 @@
       "invalid_request": "The worker rejected this request. Update the integration and worker together.",
       "unknown": "An unexpected error occurred.",
       "ssh_host_key": "SSH host key verification failed. Verify the host and reconfigure the known_hosts entry.",
-      "invalid_totp": "Invalid TOTP URI. Use otpauth://totp/... with a Base32 secret and six digits."
+      "invalid_totp": "Invalid TOTP URI. Use otpauth://totp/... with a Base32 secret and six digits.",
+      "login_timeout": "The HR WORKS login timed out. Check the portal and try again."
     },
     "abort": {
       "already_configured": "This employee account is already configured.",
@@ -226,7 +227,8 @@
           "invalid_request": "The worker rejected this request. Update the integration and worker together.",
           "unknown": "An unexpected error occurred.",
           "ssh_host_key": "SSH host key verification failed. Verify the host and reconfigure the known_hosts entry.",
-          "invalid_totp": "Invalid TOTP URI. Use otpauth://totp/... with a Base32 secret and six digits."
+          "invalid_totp": "Invalid TOTP URI. Use otpauth://totp/... with a Base32 secret and six digits.",
+          "login_timeout": "The HR WORKS login timed out. Check the portal and try again."
         },
         "abort": {
           "entry_removed": "The integration entry was removed.",
