@@ -569,11 +569,14 @@ class EmployeePortal:
                     await tab.click()
                     await self.settle()
                 break
+        else:
+            raise PortalError("portal_changed", 502)
         header = page.locator(".hrw-me-working-time-day-header-row").filter(
             has_text=day.strftime("%d.%m.%y")
         )
         if not await header.count():
-            raise PortalError("invalid_interval")
+            # An open week lists only days with a target or recorded time.
+            return {"today_target": 0, "today_worked": 0, "today_balance": 0}, []
         if not await header.is_visible():
             raise PortalError("portal_changed", 502)
         holder = header.locator("..").first
@@ -754,6 +757,9 @@ class EmployeePortal:
         header = page.locator(".hrw-me-working-time-day-header-row").filter(
             has_text=start.strftime("%d.%m.%y")
         )
+        if not await header.count():
+            # The portal offers no row to record into on a day without a target.
+            raise PortalError("invalid_interval")
         add = header.locator("a").filter(has=page.locator(".icon-streamline-add"))
         if not await add.count() or not await add.is_visible():
             raise PortalError("writes_disabled", 403)
