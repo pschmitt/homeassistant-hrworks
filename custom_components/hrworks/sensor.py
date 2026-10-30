@@ -307,7 +307,7 @@ class HrworksSensor(HrworksEntity, SensorEntity):
         if key == "worker_duration":
             return {f"{step}_seconds": value for step, value in (data.get("timings") or {}).items()}
         if key == "browser_session":
-            return {
+            attrs = {
                 attr: report.get(source)
                 for attr, source in {
                     "backend": "backend",
@@ -317,6 +317,15 @@ class HrworksSensor(HrworksEntity, SensorEntity):
                 }.items()
                 if report.get(source) is not None
             }
+            bd_data = self.hass.data.get("browser_daemon")
+            if isinstance(bd_data, dict):
+                for coord in bd_data.values():
+                    if hasattr(coord, "data") and isinstance(coord.data, dict):
+                        local_node = coord.data.get("local_node") or {}
+                        if "name" in local_node:
+                            attrs["browser_daemon_node"] = local_node["name"]
+                        break
+            return attrs
         if key == "last_error":
             return {
                 "last_update_success": self.coordinator.last_update_success,

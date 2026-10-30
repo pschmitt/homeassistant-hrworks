@@ -191,6 +191,9 @@
     "button": {
       "refresh": {
         "name": "Refresh"
+      },
+      "restart_browser_session": {
+        "name": "Restart browser session"
       }
     }
   },
@@ -310,6 +313,15 @@
         "dry_run": {
           "name": "Preview only",
           "description": "Check the interval and overlaps without saving anything."
+        }
+      }
+    },
+    "restart_browser_session": {
+      "name": "Restart browser session",
+      "description": "Terminate any active HR WORKS browser session in browser-daemon and trigger a fresh poll.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Account"
         }
       }
     }

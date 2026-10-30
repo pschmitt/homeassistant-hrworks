@@ -31,3 +31,9 @@ record_working_time:
       default: true
       selector:
         boolean:
+restart_browser_session:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: hrworks

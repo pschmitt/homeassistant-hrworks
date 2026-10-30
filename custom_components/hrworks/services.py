@@ -66,3 +66,35 @@ def register_services(hass) -> None:
         ),
         supports_response=SupportsResponse.OPTIONAL,
     )
+
+    async def restart_browser_session(call):
+        candidates = [
+            e
+            for e in hass.config_entries.async_entries(DOMAIN)
+            if e.state == ConfigEntryState.LOADED
+        ]
+        entry_id = call.data.get("config_entry_id")
+        if entry_id:
+            candidates = [e for e in candidates if e.entry_id == entry_id]
+        if not candidates:
+            return
+        entry = candidates[0]
+        try:
+            from custom_components.browser_daemon import async_get_client
+
+            client = async_get_client(hass)
+            if client:
+                sessions = await client.async_list_sessions()
+                for s in sessions:
+                    if s.get("profile") == "hrworks":
+                        await client.async_delete_session(s["id"])
+        except Exception:
+            pass
+        await entry.runtime_data.async_request_refresh()
+
+    hass.services.async_register(
+        DOMAIN,
+        "restart_browser_session",
+        restart_browser_session,
+        schema=vol.Schema({vol.Optional("config_entry_id"): cv.string}),
+    )

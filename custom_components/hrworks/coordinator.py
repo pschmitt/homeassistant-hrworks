@@ -151,6 +151,8 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
                     )
                     # The transport discarded the failed worker under its request
                     # lock. Backoff gives a restarting browser daemon time to return.
+                    if err.code == "browser_unavailable":
+                        await self._async_recover_browser_session()
                     await asyncio.sleep(delay)
         except WorkerError as err:
             self.last_error = err.code
@@ -321,3 +323,26 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
                 err.code,
             )
             raise
+
+    async def _async_recover_browser_session(self) -> bool:
+        """Recover from browser_unavailable by terminating hung hrworks sessions in browser_daemon."""
+        try:
+            from custom_components.browser_daemon import async_get_client
+
+            client = async_get_client(self.hass)
+            if not client:
+                return False
+            sessions = await client.async_list_sessions()
+            recovered = False
+            for s in sessions:
+                if s.get("profile") == "hrworks":
+                    LOGGER.info(
+                        "Terminating hung hrworks session %s via browser-daemon to unblock worker",
+                        s.get("id"),
+                    )
+                    await client.async_delete_session(s["id"])
+                    recovered = True
+            return recovered
+        except Exception as err:
+            LOGGER.debug("Could not recover hrworks browser session via browser-daemon: %s", err)
+            return False

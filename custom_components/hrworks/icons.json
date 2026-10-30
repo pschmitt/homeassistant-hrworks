@@ -55,12 +55,18 @@
     "button": {
       "refresh": {
         "default": "mdi:refresh"
+      },
+      "restart_browser_session": {
+        "default": "mdi:restart"
       }
     }
   },
   "services": {
     "record_working_time": {
       "service": "mdi:clock-edit-outline"
+    },
+    "restart_browser_session": {
+      "service": "mdi:restart"
     }
   }
 }

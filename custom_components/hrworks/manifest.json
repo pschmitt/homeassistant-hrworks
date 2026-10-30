@@ -4,6 +4,9 @@
   "codeowners": [
     "@pschmitt"
   ],
+  "after_dependencies": [
+    "browser_daemon"
+  ],
   "config_flow": true,
   "dependencies": [
     "frontend",

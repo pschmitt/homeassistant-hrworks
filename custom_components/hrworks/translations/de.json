@@ -182,6 +182,9 @@
     "button": {
       "refresh": {
         "name": "Aktualisieren"
+      },
+      "restart_browser_session": {
+        "name": "Browser-Sitzung neu starten"
       }
     }
   },
@@ -301,6 +304,15 @@
         "dry_run": {
           "name": "Nur Vorschau",
           "description": "Prüfe Intervall und Überschneidungen, ohne etwas zu speichern."
+        }
+      }
+    },
+    "restart_browser_session": {
+      "name": "Browser-Sitzung neu starten",
+      "description": "Beende eine aktive HR-WORKS-Browser-Sitzung im browser-daemon und führe eine neue Abfrage durch.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konto"
         }
       }
     }
