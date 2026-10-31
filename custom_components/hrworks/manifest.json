@@ -1,11 +1,11 @@
 {
   "domain": "hrworks",
   "name": "HR WORKS",
-  "codeowners": [
-    "@pschmitt"
-  ],
   "after_dependencies": [
     "browser_daemon"
+  ],
+  "codeowners": [
+    "@pschmitt"
   ],
   "config_flow": true,
   "dependencies": [

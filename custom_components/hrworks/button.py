@@ -10,9 +10,7 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
     async_add_entities(
         [
             HrworksRefreshButton(entry.runtime_data, "refresh"),
-            HrworksRestartBrowserSessionButton(
-                entry.runtime_data, "restart_browser_session"
-            ),
+            HrworksRestartBrowserSessionButton(entry.runtime_data, "restart_browser_session"),
         ]
     )
 
