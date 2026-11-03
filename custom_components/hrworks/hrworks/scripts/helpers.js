@@ -387,11 +387,13 @@ async function editorEntries(holder) {
   return entries;
 }
 
-/** The header row of a day on the working-times page, opened for reading. */
+/** The header row of a day on the working-times page, opened for reading. `row` is null
+ *  when the listed week has no row for the day, which is a day without target or time. */
 async function dayHeader(page, day, { reuse = false } = {}) {
   await navigate(page, 'working-times', reuse);
   const [year, month] = day.split('-').map(Number);
-  if (!await selectYear(page, year)) return null;
+  // The portal lists only recent years; anything else is not a day it can show.
+  if (!await selectYear(page, year)) return { offered: false, row: null };
   for (const select of await page.locator('select:visible').all()) {
     const labels = await select.locator('option').allTextContents();
     if (labels.length === 12) {
@@ -402,6 +404,7 @@ async function dayHeader(page, day, { reuse = false } = {}) {
       break;
     }
   }
+  let offered = false;
   for (const tab of await page.locator('.m-accordion__item-head').all()) {
     const title = await tab.locator('.m-accordion__item-title').innerText();
     const span = /(\d{2})\.(\d{2})\.\s*-\s*(\d{2})\.(\d{2})\./.exec(title);
@@ -409,6 +412,7 @@ async function dayHeader(page, day, { reuse = false } = {}) {
       const from = `${year}-${span[2]}-${span[1]}`;
       const to = `${year}-${span[4]}-${span[3]}`;
       if (from <= day && day <= to) {
+        offered = true;
         if ((await tab.getAttribute('class') || '').split(/\s+/).includes('collapsed')) {
           await tab.click();
           await settle(page);
@@ -417,16 +421,23 @@ async function dayHeader(page, day, { reuse = false } = {}) {
       }
     }
   }
+  // A month without the week of that day is a changed portal, not a day without time.
+  if (!offered) throw new PortalError('portal_changed');
   const header = page.locator('.hrw-me-working-time-day-header-row').filter({ hasText: portalDate(day) });
-  if (!await header.count()) throw new PortalError('invalid_interval');
+  // An open week lists only days with a target or recorded time.
+  if (!await header.count()) return { offered, row: null };
   if (!await header.isVisible()) throw new PortalError('portal_changed');
-  return header;
+  return { offered, row: header };
 }
 
 /** Actual day entries and metrics; every split interval stays separate. */
 async function workingDay(page, day, { reuse = false } = {}) {
-  const header = await dayHeader(page, day, { reuse });
-  if (header === null) return { metrics: {}, entries: [] };
+  const { offered, row: header } = await dayHeader(page, day, { reuse });
+  if (!offered) return { metrics: {}, entries: [] };
+  if (header === null) {
+    // A day without a row in its listed week has no target, no time and no balance.
+    return { metrics: { today_target: 0, today_worked: 0, today_balance: 0 }, entries: [] };
+  }
   const holder = header.locator('..').first();
   // Expansion is retained by the portal. Never toggle an already-open editor closed.
   if (!await holder.locator('input:visible, select:visible').count()) {

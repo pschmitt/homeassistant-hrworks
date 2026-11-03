@@ -27,6 +27,8 @@ async ({ page, args }, H) => {
   if (dryRun) return result;
 
   const header = page.locator('.hrw-me-working-time-day-header-row').filter({ hasText: H.portalDate(day) });
+  // A day without a row offers no editor: refuse before touching the portal.
+  if (!await header.count()) throw new PortalError('invalid_interval');
   const add = header.locator('a').filter({ has: page.locator('.icon-streamline-add') });
   if (!await add.count() || !await add.isVisible()) throw new PortalError('writes_disabled');
   const holder = header.locator('..').first();
