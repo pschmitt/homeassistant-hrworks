@@ -20,5 +20,5 @@
   "requirements": [
     "browser-daemon-client==0.12.0"
   ],
-  "version": "9.1.0"
+  "version": "9.2.0"
 }

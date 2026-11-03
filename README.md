@@ -222,5 +222,6 @@ python -m unittest discover -s tests/ha -v
 
 ## Changelog
 
+- **9.2.0:** days off (no row in the working-times week) read as days without target instead of failing, so the Work days history no longer stops at a free weekday; weeks over New Year are found; a rejected login reports `invalid_auth`, an unanswered one `login_timeout` (retried) and an unsupported second factor `unsupported_mfa`, with clearer messages; `times record --raw` enters times through HR WORKS' AI assistance; the browser session ends after each refresh.
 - **9.1.0:** the `hrworks` CLI is back, on browser-daemon: no `worker` command, no transport options; `programs.hrworks` as before.
 - **9.0.0:** the SSH worker and `programs.hrworksWorker` are removed; browser-daemon is the only backend (config entry version 2).

@@ -6,7 +6,7 @@
 - Never test writes against real working times without explicit instruction.
 - Preserve separate intervals, their types and comments. Never replace overlapping entries.
 - Use native HA config, options, reauth, reconfigure and repair flows.
-- Version releases with integers. Run Ruff formatting and linting for Python changes.
+- Version releases with semver (`9.2.0`): keep `pyproject.toml`, `manifest.json`, `nix/package.nix`, `diagnostics.py` and the README changelog in sync, and tag the release with the bare version. Run Ruff formatting and linting for Python changes.
 - Make focused commits on main; do not open pull requests unless requested.
 
 ## CI and tests
