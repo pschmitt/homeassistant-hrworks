@@ -12,5 +12,6 @@
 ## CI and tests
 
 - Run `python -m unittest discover -s tests -v` and `python -m unittest discover -s tests/ha -v` for the unit and Home Assistant tests.
+- Run `npm ci && npm test` in `tests/js` for the browser-daemon run scripts (`scripts/*.js`); they run against a synthetic, routed portal. On NixOS, set `PLAYWRIGHT_BROWSERS_PATH` to `nixpkgs#playwright-driver.browsers` (same version as the `playwright` pin) and `PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true`.
 - Run `ruff check .`, `ruff format --check .`, and `python -m build` for Python or packaging changes; CI also smoke-tests the installed CLI and runs Hassfest.
 - Before changing CI, check [pschmitt/ci-workflows](https://github.com/pschmitt/ci-workflows) for reusable components and preserve this repository's existing checks.

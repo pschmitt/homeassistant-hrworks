@@ -1,0 +1,12 @@
+{
+  "name": "hrworks-script-tests",
+  "private": true,
+  "type": "module",
+  "description": "Tests of the browser-daemon run scripts against a synthetic portal",
+  "scripts": {
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "playwright": "1.64.1"
+  }
+}

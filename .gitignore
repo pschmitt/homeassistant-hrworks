@@ -6,3 +6,4 @@ dist/
 .state/
 .env
 *.sqlite*
+node_modules/

@@ -6,6 +6,7 @@
   ],
   "enabledManagers": [
     "pep621",
+    "npm",
     "github-actions",
     "homeassistant-manifest",
     "nix",

@@ -26,6 +26,22 @@ jobs:
       - run: cd /tmp && env -u PYTHONPATH hrworks --version --json
       - run: cd /tmp && env -u PYTHONPATH hrworks completion bash
 
+  scripts:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tests/js
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: tests/js/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
+
   hassfest:
     runs-on: ubuntu-latest
     steps:
