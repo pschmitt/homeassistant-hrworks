@@ -21,14 +21,16 @@ export function script(operation) {
 
 export const html = body => `<!doctype html><html><body>${body}</body></html>`;
 
-/** A browser whose context answers every request with `serve(url)` (an HTML string). */
+/** A browser whose context answers every request with `serve(url)`: an HTML string, or
+ *  null for a request the server never answers. */
 export async function open(serve) {
   const browser = await chromium.launch();
   const context = await browser.newContext();
-  await context.route('**/*', route => route.fulfill({
-    contentType: 'text/html',
-    body: serve(new URL(route.request().url())),
-  }));
+  await context.route('**/*', route => {
+    const body = serve(new URL(route.request().url()));
+    if (body !== null) return route.fulfill({ contentType: 'text/html', body });
+    return new Promise(() => {});
+  });
   const page = await context.newPage();
   return {
     page,

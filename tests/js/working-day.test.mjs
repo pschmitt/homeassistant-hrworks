@@ -3,26 +3,36 @@ import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import { errorCode, html, open } from './harness.mjs';
 
-const MONTHS = Array.from({ length: 12 }, (_, index) => (
-  `<option${index === 9 ? ' selected' : ''}>${index + 1}</option>`)).join('');
-// Like the portal, the open week lists only days with a target or recorded time.
-const WORKING_TIMES = html(`<div class="m-portlet">
-  <select><option>2025</option><option selected>2026</option></select>
-  <select>${MONTHS}</select>
-  <div class="m-accordion__item-head"><span class="m-accordion__item-title">
-    CW 43 (19.10. - 25.10.)</span></div>
-  <div><div class="hrw-me-working-time-day-header-row"><div>Fr, 23.10.26</div>
-    <span class="hrw-me-working-time-day-header-span">-04:00 hours</span></div></div>
-  <div><div class="hrw-me-working-time-day-header-row"><div>Mo, 19.10.26</div>
-    <span class="hrw-me-working-time-day-header-span">+00:00 hours</span></div></div>
-</div>`);
+/** A working-times page with one open week. Like the portal, the week lists only days
+ *  with a target or recorded time: `rows` maps a day header (e.g. 'Fr, 23.10.26') to its
+ *  balance. */
+function workingTimes({ month, week, rows }) {
+  const months = Array.from({ length: 12 }, (_, index) => (
+    `<option${index === month - 1 ? ' selected' : ''}>${index + 1}</option>`)).join('');
+  const days = Object.entries(rows).map(([day, balance]) => `<div>
+    <div class="hrw-me-working-time-day-header-row"><div>${day}</div>
+    <span class="hrw-me-working-time-day-header-span">${balance} hours</span></div></div>`);
+  return html(`<div class="m-portlet">
+    <select><option>2025</option><option selected>2026</option></select>
+    <select>${months}</select>
+    <div class="m-accordion__item-head"><span class="m-accordion__item-title">
+      ${week}</span></div>
+    ${days.join('')}
+  </div>`);
+}
+
 const NO_TARGET = { metrics: { today_target: 0, today_worked: 0, today_balance: 0 }, entries: [] };
 
 describe('working day', () => {
   let portal;
 
   before(async () => {
-    portal = await open(() => WORKING_TIMES);
+    const page = workingTimes({
+      month: 10,
+      week: 'CW 43 (19.10. - 25.10.)',
+      rows: { 'Fr, 23.10.26': '-04:00', 'Mo, 19.10.26': '+00:00' },
+    });
+    portal = await open(() => page);
   });
 
   after(() => portal.close());
@@ -55,4 +65,28 @@ describe('working day', () => {
     };
     assert.equal(await errorCode(portal.run('record', args)), 'invalid_interval');
   });
+});
+
+describe('a week over New Year', () => {
+  // The portal shows the same week in the December and the January view.
+  for (const [month, date, expected] of [
+    [1, '2026-01-02', { metrics: { today_balance: 60 }, entries: [] }],
+    [1, '2026-01-01', NO_TARGET],
+    [12, '2025-12-29', { metrics: { today_balance: -30 }, entries: [] }],
+    [12, '2025-12-31', NO_TARGET],
+  ]) {
+    test(`${date} is found in the ${month === 1 ? 'January' : 'December'} view`, async () => {
+      const page = workingTimes({
+        month,
+        week: 'CW 1 (29.12. - 04.01.)',
+        rows: { 'Mo, 29.12.25': '-00:30', 'Fr, 02.01.26': '+01:00' },
+      });
+      const portal = await open(() => page);
+      try {
+        assert.deepEqual(await portal.run('day', { date }), expected);
+      } finally {
+        await portal.close();
+      }
+    });
+  }
 });

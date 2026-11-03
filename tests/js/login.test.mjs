@@ -30,6 +30,10 @@ describe('login', () => {
             return FORM("document.getElementById('message').textContent='Login failed'");
           }
           if (state.submit === 'stuck') return FORM("document.body.innerHTML='<p>Please wait</p>'");
+          if (state.submit === 'slow') return FORM("fetch('/authenticate', { method: 'POST' })");
+          if (state.submit === 'late') {
+            return FORM("setTimeout(() => { location.href = '/2fa-totp'; }, 1800)");
+          }
           return FORM(`location.href='${state.submit}'`);
         case '/2fa-selection':
           return html(state.factors.map(name => (name === 'Authenticator' && !state.stuckSelection
@@ -41,6 +45,8 @@ describe('login', () => {
             === '123456') location.href='${DASHBOARD}'">Unlock</button>`);
         case '/2fa-setup':
           return html('<p>Set up a second factor</p>');
+        case '/authenticate':
+          return null;
         default:
           return html('<p>Please wait</p>');
       }
@@ -76,6 +82,16 @@ describe('login', () => {
   test('rejected credentials are invalid_auth', async () => {
     state.submit = 'rejected';
     assert.equal(await errorCode(login()), 'invalid_auth');
+  });
+
+  test('a login the server has not answered yet is login_timeout, not invalid_auth', async () => {
+    state.submit = 'slow';
+    assert.equal(await errorCode(login()), 'login_timeout');
+  });
+
+  test('a login that moves on just after the step timeout still completes', async () => {
+    state.submit = 'late';
+    assert.deepEqual(await login(), { mfa_required: true });
   });
 
   test('a login form that goes nowhere is login_timeout, not invalid_auth', async () => {

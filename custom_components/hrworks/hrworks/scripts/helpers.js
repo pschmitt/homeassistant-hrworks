@@ -193,16 +193,34 @@ async function login(page, context, { company, username, password, force }) {
   // A lasting login: later runs (and a recovery after an expired session) skip the form.
   const keep = page.getByRole('checkbox', { name: /Keep me logged in|Angemeldet bleiben/ });
   if (await keep.count()) await keep.first().check().catch(() => {});
-  await page.getByRole('button', { name: /Log in to HR WORKS|Anmelden/ }).click();
+  // Requests of the page that are still unanswered: a login the server has not answered yet
+  // is a slow portal, not rejected credentials.
+  const pending = new Set();
+  const track = request => {
+    if (['document', 'xhr', 'fetch'].includes(request.resourceType())) pending.add(request);
+  };
+  const done = request => pending.delete(request);
+  page.on('request', track);
+  page.on('requestfinished', done);
+  page.on('requestfailed', done);
+  const passwordForm = () => page.locator('input[type=password]:visible').count();
   try {
-    await page.waitForURL(url => url.pathname !== '/', { timeout: LOGIN_STEP_TIMEOUT });
-  } catch (err) {
-    if (!isTimeout(err)) throw err;
-    // A rejected login re-renders the form; any other state is an unknown wait.
-    if (await page.locator('input[type=password]:visible').count()) {
-      throw new PortalError('invalid_auth');
+    await page.getByRole('button', { name: /Log in to HR WORKS|Anmelden/ }).click();
+    try {
+      await page.waitForURL(url => url.pathname !== '/', { timeout: LOGIN_STEP_TIMEOUT });
+    } catch (err) {
+      if (!isTimeout(err)) throw err;
+      if (pending.size || !await passwordForm()) throw new PortalError('login_timeout');
+      // Answered, and the form is back: a rejection, unless the answer still navigates.
+      await settle(page).catch(() => {});
+      if (new URL(page.url()).pathname === '/') {
+        throw new PortalError(!pending.size && await passwordForm() ? 'invalid_auth' : 'login_timeout');
+      }
     }
-    throw new PortalError('login_timeout');
+  } finally {
+    page.off('request', track);
+    page.off('requestfinished', done);
+    page.off('requestfailed', done);
   }
   if (page.url().includes('2fa-selection')) {
     const authenticator = page.getByText('Authenticator', { exact: true });
@@ -422,8 +440,11 @@ async function dayHeader(page, day, { reuse = false } = {}) {
     const title = await tab.locator('.m-accordion__item-title').innerText();
     const span = /(\d{2})\.(\d{2})\.\s*-\s*(\d{2})\.(\d{2})\./.exec(title);
     if (span) {
-      const from = `${year}-${span[2]}-${span[1]}`;
-      const to = `${year}-${span[4]}-${span[3]}`;
+      // Titles carry no year. A week over New Year ("29.12. - 04.01.") starts in the
+      // previous year in the January view and ends in the next year in the December view.
+      const crosses = span[2] > span[4];
+      const from = `${crosses && month === 1 ? year - 1 : year}-${span[2]}-${span[1]}`;
+      const to = `${crosses && month !== 1 ? year + 1 : year}-${span[4]}-${span[3]}`;
       if (from <= day && day <= to) {
         offered = true;
         if ((await tab.getAttribute('class') || '').split(/\s+/).includes('collapsed')) {
