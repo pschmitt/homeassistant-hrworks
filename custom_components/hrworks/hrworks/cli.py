@@ -58,14 +58,14 @@ for name, group in [
 
 ERROR_MESSAGES = {
     "cache_unavailable": "Cannot access the private read cache. Check HRWORKS_CACHE_DIR permissions or remove a damaged cache database.",
-    "unsupported_mfa": "This employee login needs an unsupported second factor. Use authenticator TOTP.",
+    "unsupported_mfa": "This employee login needs an unsupported second factor. Set up Authenticator (TOTP) in HR WORKS, then log in again.",
     "busy": "The browser is busy. Try again shortly.",
     "not_found": "Session or operation not found. Authenticate again.",
     "invalid_request": "The request was rejected. Check the input and the browser-daemon settings.",
     "cannot_connect": "Cannot reach browser-daemon. Check the URL (--config, BROWSER_DAEMON_URL) and that it runs.",
     "worker_auth": "browser-daemon rejected the cluster secret. Check --secret-file or BROWSER_DAEMON_SECRET_FILE.",
     "invalid_auth": "Employee login failed. Check your credentials.",
-    "login_timeout": "Employee login timed out. Check the HR WORKS portal and try again.",
+    "login_timeout": "The HR WORKS login did not reach a known login step in time. Try again later; if it persists, check the portal in a browser.",
     "mfa_required": "MFA is required. Run hrworks auth login interactively or configure a TOTP URI.",
     "session_expired": "Session expired. Run hrworks auth login or configure credentials for automatic recovery.",
     "invalid_code": "Authenticator code rejected. Try a fresh code.",

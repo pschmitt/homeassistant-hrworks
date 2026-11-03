@@ -42,7 +42,7 @@
       "incompatible_worker": "browser-daemon führt keine Runs aus. Aktiviere Runs auf dem Knoten (--run-node).",
       "invalid_auth": "Die Anmeldung ist fehlgeschlagen. Prüfe Firmenkennung, Benutzerkennung und Passwort.",
       "invalid_code": "Der Authenticator-Code wurde abgelehnt oder die Anmeldung ist abgelaufen. Versuche einen neuen Code oder starte die Anmeldung erneut.",
-      "unsupported_mfa": "Diese Anmeldung benötigt einen nicht unterstützten zweiten Faktor oder eine interaktive Bestätigung. Verwende eine Mitarbeiteranmeldung mit Authenticator.",
+      "unsupported_mfa": "HR WORKS verlangt einen zweiten Faktor, den diese Anmeldung nicht abschließen kann. Richte in HR WORKS Authenticator (TOTP) als zweiten Faktor ein und versuche es erneut.",
       "session_expired": "Die Mitarbeitersitzung ist abgelaufen. Melde dich erneut an.",
       "mfa_required": "Gib einen aktuellen Authenticator-Code ein.",
       "different_account": "Dieser Eintrag gehört zu einem anderen Mitarbeiter. Füge für ein anderes Konto einen neuen Integrationseintrag hinzu.",
@@ -52,7 +52,7 @@
       "invalid_request": "Die Anfrage wurde abgelehnt. Prüfe URL, Cluster-Geheimnis und Profil.",
       "unknown": "Ein unerwarteter Fehler ist aufgetreten.",
       "invalid_totp": "Ungültige TOTP-URI. Verwende otpauth://totp/... mit einem Base32-Geheimnis und sechs Stellen.",
-      "login_timeout": "Die HR-WORKS-Anmeldung hat zu lange gedauert. Prüfe das Portal und versuche es erneut."
+      "login_timeout": "Die HR-WORKS-Anmeldung hat keinen bekannten Anmeldeschritt rechtzeitig erreicht. Versuche es später erneut; prüfe das Portal im Browser, falls es weiter auftritt."
     },
     "abort": {
       "already_configured": "Dieses Mitarbeiterkonto ist bereits eingerichtet.",
@@ -204,7 +204,7 @@
           "incompatible_worker": "browser-daemon führt keine Runs aus. Aktiviere Runs auf dem Knoten (--run-node).",
           "invalid_auth": "Die Anmeldung ist fehlgeschlagen. Prüfe Firmenkennung, Benutzerkennung und Passwort.",
           "invalid_code": "Der Authenticator-Code wurde abgelehnt oder die Anmeldung ist abgelaufen. Versuche einen neuen Code oder starte die Anmeldung erneut.",
-          "unsupported_mfa": "Diese Anmeldung benötigt einen nicht unterstützten zweiten Faktor oder eine interaktive Bestätigung. Verwende eine Mitarbeiteranmeldung mit Authenticator.",
+          "unsupported_mfa": "HR WORKS verlangt einen zweiten Faktor, den diese Anmeldung nicht abschließen kann. Richte in HR WORKS Authenticator (TOTP) als zweiten Faktor ein und versuche es erneut.",
           "session_expired": "Die Mitarbeitersitzung ist abgelaufen. Melde dich erneut an.",
           "mfa_required": "Gib einen aktuellen Authenticator-Code ein.",
           "different_account": "Dieser Eintrag gehört zu einem anderen Mitarbeiter. Füge für ein anderes Konto einen neuen Integrationseintrag hinzu.",
@@ -214,7 +214,7 @@
           "invalid_request": "Die Anfrage wurde abgelehnt. Prüfe URL, Cluster-Geheimnis und Profil.",
           "unknown": "Ein unerwarteter Fehler ist aufgetreten.",
           "invalid_totp": "Ungültige TOTP-URI. Verwende otpauth://totp/... mit einem Base32-Geheimnis und sechs Stellen.",
-          "login_timeout": "Die HR-WORKS-Anmeldung hat zu lange gedauert. Prüfe das Portal und versuche es erneut."
+          "login_timeout": "Die HR-WORKS-Anmeldung hat keinen bekannten Anmeldeschritt rechtzeitig erreicht. Versuche es später erneut; prüfe das Portal im Browser, falls es weiter auftritt."
         },
         "abort": {
           "entry_removed": "Der Integrationseintrag wurde entfernt.",

@@ -317,6 +317,28 @@ class CliTests(unittest.TestCase):
         self.assertTrue(json.loads(result.stdout)["authenticated"])
         self.assertNotIn("123456", result.stdout + result.stderr)
 
+    def test_login_failures_name_their_cause(self):
+        self.store.save(
+            "default",
+            {
+                "company_id": "example",
+                "username": "invented",
+                "password": "synthetic",
+            },
+        )
+        for code, status, hint in [
+            ("unsupported_mfa", 1, "Authenticator (TOTP)"),
+            ("login_timeout", 1, "did not reach a known login step"),
+            ("invalid_auth", 3, "Check your credentials"),
+        ]:
+            with self.subTest(code=code):
+                self.env["HRWORKS_TEST_LOGIN_ERROR"] = code
+                result = self.cli("auth", "login", "--json")
+                self.assertEqual(result.returncode, status, result.stdout + result.stderr)
+                error = json.loads(result.stdout)["error"]
+                self.assertEqual(error["code"], code)
+                self.assertIn(hint, error["message"])
+
     def test_disabled_writes_and_partial_batch(self):
         path = Path(self.directory.name) / "batch.csv"
         path.write_text(

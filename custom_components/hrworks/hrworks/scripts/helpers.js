@@ -4,6 +4,7 @@
 // `hrworks:<code>`; everything else (Playwright timeouts, ...) counts as an unavailable browser.
 
 const LOGIN_URL = 'https://ssl6.hrworks.de/o/dashboard';
+const LOGIN_STEP_TIMEOUT = 15000;
 const VIEWPORT = { width: 1600, height: 1000 };
 const HRWORKS_COOKIES = /(^|\.)hrworks\.de$/;
 const TIME_RE = /^([+−-]?)(\d+):(\d{2})(?:\s*(?:Hours|hours|Stunden))?$/;
@@ -194,19 +195,31 @@ async function login(page, context, { company, username, password, force }) {
   if (await keep.count()) await keep.first().check().catch(() => {});
   await page.getByRole('button', { name: /Log in to HR WORKS|Anmelden/ }).click();
   try {
-    await page.waitForURL(url => url.pathname !== '/', { timeout: 15000 });
+    await page.waitForURL(url => url.pathname !== '/', { timeout: LOGIN_STEP_TIMEOUT });
   } catch (err) {
-    if (isTimeout(err)) throw new PortalError('login_timeout');
-    throw err;
+    if (!isTimeout(err)) throw err;
+    // A rejected login re-renders the form; any other state is an unknown wait.
+    if (await page.locator('input[type=password]:visible').count()) {
+      throw new PortalError('invalid_auth');
+    }
+    throw new PortalError('login_timeout');
   }
   if (page.url().includes('2fa-selection')) {
     const authenticator = page.getByText('Authenticator', { exact: true });
     if (!await authenticator.count()) throw new PortalError('unsupported_mfa');
     await authenticator.click();
-    await page.waitForURL('**/2fa-totp');
+    try {
+      await page.waitForURL('**/2fa-totp', { timeout: LOGIN_STEP_TIMEOUT });
+    } catch (err) {
+      if (!isTimeout(err)) throw err;
+      throw new PortalError('login_timeout');
+    }
   }
   if (page.url().includes('2fa-totp')) return { mfa_required: true };
-  if (!page.url().includes('/o/')) throw new PortalError('unsupported_mfa');
+  // Any other second-factor step (another method or its setup) needs a person.
+  if (new URL(page.url()).pathname.includes('2fa')) throw new PortalError('unsupported_mfa');
+  // A portal that did not render after login is a slow or changed portal, not a second factor.
+  if (!new URL(page.url()).pathname.startsWith('/o/')) throw new PortalError('login_timeout');
   await settle(page);
   return { authenticated: true };
 }
