@@ -4,6 +4,7 @@
 // `hrworks:<code>`; everything else (Playwright timeouts, ...) counts as an unavailable browser.
 
 const LOGIN_URL = 'https://ssl6.hrworks.de/o/dashboard';
+const LOGIN_STEP_TIMEOUT = 15000;
 const VIEWPORT = { width: 1600, height: 1000 };
 const HRWORKS_COOKIES = /(^|\.)hrworks\.de$/;
 const TIME_RE = /^([+−-]?)(\d+):(\d{2})(?:\s*(?:Hours|hours|Stunden))?$/;
@@ -192,21 +193,51 @@ async function login(page, context, { company, username, password, force }) {
   // A lasting login: later runs (and a recovery after an expired session) skip the form.
   const keep = page.getByRole('checkbox', { name: /Keep me logged in|Angemeldet bleiben/ });
   if (await keep.count()) await keep.first().check().catch(() => {});
-  await page.getByRole('button', { name: /Log in to HR WORKS|Anmelden/ }).click();
+  // Requests of the page that are still unanswered: a login the server has not answered yet
+  // is a slow portal, not rejected credentials.
+  const pending = new Set();
+  const track = request => {
+    if (['document', 'xhr', 'fetch'].includes(request.resourceType())) pending.add(request);
+  };
+  const done = request => pending.delete(request);
+  page.on('request', track);
+  page.on('requestfinished', done);
+  page.on('requestfailed', done);
+  const passwordForm = () => page.locator('input[type=password]:visible').count();
   try {
-    await page.waitForURL(url => url.pathname !== '/', { timeout: 15000 });
-  } catch (err) {
-    if (isTimeout(err)) throw new PortalError('login_timeout');
-    throw err;
+    await page.getByRole('button', { name: /Log in to HR WORKS|Anmelden/ }).click();
+    try {
+      await page.waitForURL(url => url.pathname !== '/', { timeout: LOGIN_STEP_TIMEOUT });
+    } catch (err) {
+      if (!isTimeout(err)) throw err;
+      if (pending.size || !await passwordForm()) throw new PortalError('login_timeout');
+      // Answered, and the form is back: a rejection, unless the answer still navigates.
+      await settle(page).catch(() => {});
+      if (new URL(page.url()).pathname === '/') {
+        throw new PortalError(!pending.size && await passwordForm() ? 'invalid_auth' : 'login_timeout');
+      }
+    }
+  } finally {
+    page.off('request', track);
+    page.off('requestfinished', done);
+    page.off('requestfailed', done);
   }
   if (page.url().includes('2fa-selection')) {
     const authenticator = page.getByText('Authenticator', { exact: true });
     if (!await authenticator.count()) throw new PortalError('unsupported_mfa');
     await authenticator.click();
-    await page.waitForURL('**/2fa-totp');
+    try {
+      await page.waitForURL('**/2fa-totp', { timeout: LOGIN_STEP_TIMEOUT });
+    } catch (err) {
+      if (!isTimeout(err)) throw err;
+      throw new PortalError('login_timeout');
+    }
   }
   if (page.url().includes('2fa-totp')) return { mfa_required: true };
-  if (!page.url().includes('/o/')) throw new PortalError('unsupported_mfa');
+  // Any other second-factor step (another method or its setup) needs a person.
+  if (new URL(page.url()).pathname.includes('2fa')) throw new PortalError('unsupported_mfa');
+  // A portal that did not render after login is a slow or changed portal, not a second factor.
+  if (!new URL(page.url()).pathname.startsWith('/o/')) throw new PortalError('login_timeout');
   await settle(page);
   return { authenticated: true };
 }
@@ -387,11 +418,13 @@ async function editorEntries(holder) {
   return entries;
 }
 
-/** The header row of a day on the working-times page, opened for reading. */
+/** The header row of a day on the working-times page, opened for reading. `row` is null
+ *  when the listed week has no row for the day, which is a day without target or time. */
 async function dayHeader(page, day, { reuse = false } = {}) {
   await navigate(page, 'working-times', reuse);
   const [year, month] = day.split('-').map(Number);
-  if (!await selectYear(page, year)) return null;
+  // The portal lists only recent years; anything else is not a day it can show.
+  if (!await selectYear(page, year)) return { offered: false, row: null };
   for (const select of await page.locator('select:visible').all()) {
     const labels = await select.locator('option').allTextContents();
     if (labels.length === 12) {
@@ -402,13 +435,18 @@ async function dayHeader(page, day, { reuse = false } = {}) {
       break;
     }
   }
+  let offered = false;
   for (const tab of await page.locator('.m-accordion__item-head').all()) {
     const title = await tab.locator('.m-accordion__item-title').innerText();
     const span = /(\d{2})\.(\d{2})\.\s*-\s*(\d{2})\.(\d{2})\./.exec(title);
     if (span) {
-      const from = `${year}-${span[2]}-${span[1]}`;
-      const to = `${year}-${span[4]}-${span[3]}`;
+      // Titles carry no year. A week over New Year ("29.12. - 04.01.") starts in the
+      // previous year in the January view and ends in the next year in the December view.
+      const crosses = span[2] > span[4];
+      const from = `${crosses && month === 1 ? year - 1 : year}-${span[2]}-${span[1]}`;
+      const to = `${crosses && month !== 1 ? year + 1 : year}-${span[4]}-${span[3]}`;
       if (from <= day && day <= to) {
+        offered = true;
         if ((await tab.getAttribute('class') || '').split(/\s+/).includes('collapsed')) {
           await tab.click();
           await settle(page);
@@ -417,16 +455,23 @@ async function dayHeader(page, day, { reuse = false } = {}) {
       }
     }
   }
+  // A month without the week of that day is a changed portal, not a day without time.
+  if (!offered) throw new PortalError('portal_changed');
   const header = page.locator('.hrw-me-working-time-day-header-row').filter({ hasText: portalDate(day) });
-  if (!await header.count()) throw new PortalError('invalid_interval');
+  // An open week lists only days with a target or recorded time.
+  if (!await header.count()) return { offered, row: null };
   if (!await header.isVisible()) throw new PortalError('portal_changed');
-  return header;
+  return { offered, row: header };
 }
 
 /** Actual day entries and metrics; every split interval stays separate. */
 async function workingDay(page, day, { reuse = false } = {}) {
-  const header = await dayHeader(page, day, { reuse });
-  if (header === null) return { metrics: {}, entries: [] };
+  const { offered, row: header } = await dayHeader(page, day, { reuse });
+  if (!offered) return { metrics: {}, entries: [] };
+  if (header === null) {
+    // A day without a row in its listed week has no target, no time and no balance.
+    return { metrics: { today_target: 0, today_worked: 0, today_balance: 0 }, entries: [] };
+  }
   const holder = header.locator('..').first();
   // Expansion is retained by the portal. Never toggle an already-open editor closed.
   if (!await holder.locator('input:visible, select:visible').count()) {

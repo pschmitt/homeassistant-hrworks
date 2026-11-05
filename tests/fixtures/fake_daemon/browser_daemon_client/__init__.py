@@ -78,6 +78,8 @@ class BrowserDaemon:
         if operation == "probe":
             return RunResult(ok=True, result={"browser_version": "1"})
         if operation == "login":
+            if env("HRWORKS_TEST_LOGIN_ERROR"):
+                raise failed(env("HRWORKS_TEST_LOGIN_ERROR"))
             if env("HRWORKS_TEST_MFA"):
                 return RunResult(ok=True, result={"mfa_required": True}, page="TAB")
             return RunResult(ok=True, result={"authenticated": True}, page="TAB")

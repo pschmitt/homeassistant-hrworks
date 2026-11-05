@@ -13,7 +13,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.15'
-      - run: pip install ruff aiohttp rich typer browser-daemon-client==0.10.0
+      - run: pip install ruff aiohttp rich typer browser-daemon-client==0.12.0
       - run: ruff check .
       - run: ruff format --check .
       - run: |
@@ -25,6 +25,22 @@ jobs:
       - run: pip install --force-reinstall dist/*.whl
       - run: cd /tmp && env -u PYTHONPATH hrworks --version --json
       - run: cd /tmp && env -u PYTHONPATH hrworks completion bash
+
+  scripts:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tests/js
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '26'
+          cache: npm
+          cache-dependency-path: tests/js/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
 
   hassfest:
     runs-on: ubuntu-latest
@@ -38,7 +54,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.15'
-      - run: pip install homeassistant==2026.11.0 browser-daemon-client==0.10.0
+      - run: pip install homeassistant==2026.11.0 browser-daemon-client==0.12.0
       - run: |
           mkdir -p /tmp/dev && ln -s "$PWD/custom_components/hrworks/hrworks" /tmp/dev/hrworks
           echo "PYTHONPATH=$PWD:/tmp/dev" >> "$GITHUB_ENV"

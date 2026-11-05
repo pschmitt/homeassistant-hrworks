@@ -5,7 +5,7 @@ async def async_get_config_entry_diagnostics(hass, config_entry) -> dict:
     coordinator = getattr(config_entry, "runtime_data", None)
     data = coordinator.data if coordinator and coordinator.data else {}
     return {
-        "version": "9.1.0",
+        "version": "9.2.0",
         "options": dict(config_entry.options),
         "last_error": coordinator.last_error if coordinator else None,
         "last_error_stage": coordinator.last_error_stage if coordinator else None,
