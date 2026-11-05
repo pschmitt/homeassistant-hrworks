@@ -8,8 +8,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.hrworks.api import WorkerError
-from custom_components.hrworks.auth import secret_settings
-from custom_components.hrworks.config_flow import HrworksConfigFlow, account_schema
+from custom_components.hrworks.auth import authenticate, complete_mfa, credentials, secret_settings
+from custom_components.hrworks.config_flow import (
+    HrworksConfigFlow,
+    account_schema,
+    connection_schema,
+)
 from custom_components.hrworks.coordinator import HrworksCoordinator
 from custom_components.hrworks.repairs import EmployeeLoginRepair, WorkerUnavailableRepair
 from custom_components.hrworks.totp import InvalidTotp
@@ -27,6 +31,8 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
     def flow(self, source="user", data=None):
         flow = HrworksConfigFlow()
         flow.context = {"source": source}
+        flow.hass = MagicMock()
+        flow.hass.config_entries.async_entries.return_value = []
         flow._data = dict(DATA if data is None else data)
         flow._client = SimpleNamespace(
             login=AsyncMock(return_value={"profile_id": "b" * 64, "mfa_required": True}),
@@ -37,6 +43,169 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
         if source != "user":
             flow._entry = SimpleNamespace(data=dict(DATA))
         return flow
+
+    def test_profile_default_preserves_existing_names_and_explicit_throwaway(self):
+        for defaults, expected in (
+            ({}, "ha-hrworks"),
+            ({"browser_daemon_profile": "hrworks"}, "hrworks"),
+            ({"browser_daemon_profile": ""}, ""),
+        ):
+            markers = {key.schema: key for key in connection_schema(defaults).schema}
+            self.assertEqual(markers["browser_daemon_profile"].default(), expected)
+
+    def test_account_fields_depend_on_vault_selection(self):
+        markers = {key.schema: key for key in account_schema({}).schema}
+        self.assertEqual(markers["password"].visible, {"field": "rbw_entry_id", "value": ""})
+        self.assertEqual(markers["totp_uri"].visible, markers["password"].visible)
+        self.assertEqual(
+            markers["rbw_item_id"].visible,
+            {"field": "rbw_entry_id", "operator": "not_eq", "value": ""},
+        )
+
+    def test_native_visibility_serializes_and_strips_hidden_credentials(self):
+        import probatio
+        from homeassistant.data_entry_flow import (
+            _strip_hidden_fields,
+            add_visible_conditions_to_serialized_schema,
+        )
+        from homeassistant.helpers import config_validation as cv
+
+        hass = MagicMock()
+        hass.config_entries.async_entries.return_value = [
+            SimpleNamespace(entry_id="vault", title="Vault")
+        ]
+        schema = account_schema({}, hass=hass)
+        fields = probatio.to_field_list(schema, custom_serializer=cv.custom_serializer)
+        add_visible_conditions_to_serialized_schema(schema, fields)
+        password = next(field for field in fields if field["name"] == "password")
+        self.assertEqual(password["visible"], {"field": "rbw_entry_id", "value": ""})
+        vault_input = {
+            "company_id": "example",
+            "username": "employee",
+            "password": "hidden",
+            "rbw_entry_id": "vault",
+            "rbw_item_id": "item",
+            "totp_uri": "hidden",
+        }
+        visible_schema, visible_input = _strip_hidden_fields(schema, vault_input)
+        validated = visible_schema(visible_input)
+        self.assertNotIn("password", validated)
+        self.assertNotIn("totp_uri", validated)
+        direct_schema, direct_input = _strip_hidden_fields(
+            schema,
+            {
+                "company_id": "example",
+                "username": "employee",
+                "password": "direct",
+                "rbw_entry_id": "",
+                "rbw_item_id": "stale-item",
+            },
+        )
+        self.assertNotIn("rbw_item_id", direct_schema(direct_input))
+
+    async def test_disabling_vault_clears_hidden_old_item(self):
+        flow = self.flow(data={**DATA, "rbw_entry_id": "old-vault", "rbw_item_id": "old-item"})
+        flow._client.login.return_value = {"profile_id": "b" * 64, "authenticated": True}
+        result = await flow.async_step_account({**DATA, "rbw_entry_id": ""})
+        self.assertEqual(result["type"], "done")
+        self.assertEqual(flow._data["rbw_item_id"], "")
+
+    async def test_rbw_reads_fresh_password_and_current_code_per_attempt(self):
+        settings = {**DATA, "rbw_entry_id": "vault", "rbw_item_id": "item"}
+        original = dict(settings)
+        reader = AsyncMock(
+            side_effect=[
+                {"value": "employee"},
+                {"value": "first"},
+                {"value": "123456"},
+                {"value": "employee"},
+                {"value": "changed"},
+                {"value": "654321"},
+            ]
+        )
+        client = self.flow()._client
+        with patch.dict(
+            "sys.modules", {"custom_components.rbw": SimpleNamespace(async_get_field=reader)}
+        ):
+            await authenticate(client, settings, hass=object())
+            await authenticate(client, settings, hass=object())
+        self.assertEqual(
+            [call.args[2] for call in client.login.await_args_list], ["first", "changed"]
+        )
+        self.assertEqual(
+            [call.args[0] for call in client.mfa.await_args_list], ["123456", "654321"]
+        )
+        self.assertEqual(
+            [call.args[3] for call in reader.await_args_list], ["username", "password", "totp"] * 2
+        )
+        self.assertEqual(settings, original)
+
+    async def test_rbw_unavailable_never_falls_back_to_saved_password(self):
+        settings = {**DATA, "rbw_entry_id": "vault", "rbw_item_id": "item"}
+        for result in ({}, {"value": ""}, RuntimeError("private vault failure")):
+            reader = AsyncMock(
+                side_effect=result if isinstance(result, Exception) else None, return_value=result
+            )
+            client = self.flow()._client
+            with patch.dict(
+                "sys.modules", {"custom_components.rbw": SimpleNamespace(async_get_field=reader)}
+            ):
+                with self.assertRaises(WorkerError) as caught:
+                    await authenticate(client, settings, hass=object())
+            self.assertEqual(caught.exception.code, "rbw_unavailable")
+            self.assertNotIn("private vault failure", str(caught.exception))
+            client.login.assert_not_awaited()
+
+    async def test_rbw_account_mismatch_stops_before_password_read(self):
+        reader = AsyncMock(return_value={"value": "other"})
+        with patch.dict(
+            "sys.modules", {"custom_components.rbw": SimpleNamespace(async_get_field=reader)}
+        ):
+            with self.assertRaises(WorkerError) as caught:
+                await credentials(
+                    object(), {**DATA, "rbw_entry_id": "vault", "rbw_item_id": "item"}
+                )
+        self.assertEqual(caught.exception.code, "different_account")
+        reader.assert_awaited_once()
+
+    async def test_direct_credentials_do_not_access_rbw(self):
+        reader = AsyncMock(side_effect=AssertionError("rbw must stay optional"))
+        with patch.dict(
+            "sys.modules", {"custom_components.rbw": SimpleNamespace(async_get_field=reader)}
+        ):
+            self.assertEqual(await credentials(object(), DATA), DATA)
+        reader.assert_not_awaited()
+
+    async def test_rbw_setup_and_manual_mfa_do_not_persist_direct_secrets(self):
+        flow = self.flow()
+        reader = AsyncMock(
+            side_effect=[{"value": "employee"}, {"value": "fresh"}, {"value": "123456"}]
+        )
+        with patch.dict(
+            "sys.modules", {"custom_components.rbw": SimpleNamespace(async_get_field=reader)}
+        ):
+            result = await flow.async_step_account(
+                {**DATA, "rbw_entry_id": "vault", "rbw_item_id": "item", "totp_uri": URI}
+            )
+        self.assertEqual(result["type"], "done")
+        self.assertNotIn("password", flow._data)
+        self.assertNotIn("totp_uri", flow._data)
+        settings = await complete_mfa(
+            flow._client,
+            flow._data,
+            {"code": "654321", "password": "ignored", "totp_uri": URI},
+            hass=flow.hass,
+        )
+        self.assertNotIn("password", settings)
+        self.assertNotIn("totp_uri", settings)
+        self.assertNotIn("code", settings)
+        flow._client.mfa.assert_awaited_with("654321")
+
+    async def test_incomplete_rbw_selection_does_not_login(self):
+        flow = self.flow()
+        result = await flow.async_step_account({**DATA, "rbw_entry_id": "vault"})
+        self.assertEqual(result["errors"]["base"], "rbw_incomplete")
+        flow._client.login.assert_not_awaited()
 
     async def test_setup_generates_code_from_uri(self):
         flow = self.flow()
@@ -102,6 +271,16 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
             if str(key) in {"password", "totp_uri"}:
                 self.assertNotEqual(key.default, URI)
                 self.assertNotEqual(key.default, DATA["password"])
+
+    async def test_direct_repair_keeps_credential_fields_visible_without_vault_selector(self):
+        from homeassistant.data_entry_flow import _strip_hidden_fields
+
+        repair = EmployeeLoginRepair("test-entry")
+        repair.hass = MagicMock()
+        repair.hass.config_entries.async_entries.return_value = []
+        form = repair._show_login_form(SimpleNamespace(data=DATA), {})
+        schema, submitted = _strip_hidden_fields(form["data_schema"], {"password": "replacement"})
+        self.assertEqual(schema(submitted)["password"], "replacement")
 
     async def test_repair_saves_new_uri_only_after_success(self):
         entry = SimpleNamespace(data=DATA, unique_id=DATA["profile_id"])

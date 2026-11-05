@@ -8,7 +8,8 @@
         "data": {
           "browser_daemon_url": "browser-daemon URL",
           "browser_daemon_secret": "Cluster secret",
-          "browser_daemon_profile": "Browser profile",
+          "browser_daemon_profile": "Browser profile (default: ha-hrworks; blank: throwaway)",
+          "browser_daemon_node_group": "Browser Daemon node group (optional)",
           "name": "Device name"
         }
       },
@@ -18,16 +19,19 @@
         "data": {
           "browser_daemon_url": "browser-daemon URL",
           "browser_daemon_secret": "Cluster secret",
-          "browser_daemon_profile": "Browser profile",
+          "browser_daemon_profile": "Browser profile (default: ha-hrworks; blank: throwaway)",
+          "browser_daemon_node_group": "Browser Daemon node group (optional)",
           "name": "Device name"
         }
       },
       "account": {
         "title": "Your employee account",
-        "description": "Use your employee login. Reconfigure can change company, username and password. Blank secret fields keep saved values. A saved TOTP URI is tried automatically; enter a six-digit code here if needed.",
+        "description": "Use your employee login with a password and optional TOTP URI, or select an rbw integration and item ID. rbw supplies fresh username, password and current authenticator codes; the username must match. Leave both rbw fields empty for direct credentials. Blank direct secret fields keep saved values.",
         "data": {
           "company_id": "Company ID",
           "username": "User ID",
+          "rbw_entry_id": "rbw integration (optional)",
+          "rbw_item_id": "rbw employee account item ID (optional)",
           "password": "Password",
           "totp_uri": "TOTP URI (optional)",
           "clear_totp": "Remove saved TOTP URI",
@@ -52,7 +56,9 @@
       "invalid_request": "The request was rejected. Check the URL, cluster secret and profile.",
       "unknown": "An unexpected error occurred.",
       "invalid_totp": "Invalid TOTP URI. Use otpauth://totp/... with a Base32 secret and six digits.",
-      "login_timeout": "The HR WORKS login timed out. Check the portal and try again."
+      "login_timeout": "The HR WORKS login timed out. Check the portal and try again.",
+      "rbw_incomplete": "Select both an rbw integration and an item ID, or leave both empty for direct credentials.",
+      "rbw_unavailable": "Could not read the selected rbw account. Unlock the vault and check item and field permissions, then retry."
     },
     "abort": {
       "already_configured": "This employee account is already configured.",
@@ -197,7 +203,7 @@
         "step": {
           "login": {
             "title": "Sign in again",
-            "description": "Continue with the saved employee login. A saved TOTP URI is tried automatically. Enter a six-digit code if needed, or replace the URI here.",
+            "description": "Continue with the configured employee login. rbw supplies fresh credentials and authenticator codes when selected; otherwise the saved password and TOTP URI are used. Enter a six-digit code if needed. Change the credential source through Reconfigure.",
             "data": {
               "password": "Password",
               "totp_uri": "TOTP URI (optional)",
@@ -223,7 +229,9 @@
           "invalid_request": "The request was rejected. Check the URL, cluster secret and profile.",
           "unknown": "An unexpected error occurred.",
           "invalid_totp": "Invalid TOTP URI. Use otpauth://totp/... with a Base32 secret and six digits.",
-          "login_timeout": "The HR WORKS login timed out. Check the portal and try again."
+          "login_timeout": "The HR WORKS login timed out. Check the portal and try again.",
+          "rbw_incomplete": "Select both an rbw integration and an item ID, or leave both empty for direct credentials.",
+          "rbw_unavailable": "Could not read the selected rbw account. Unlock the vault and check item and field permissions, then retry."
         },
         "abort": {
           "entry_removed": "The integration entry was removed.",

@@ -33,14 +33,15 @@ The portal logic runs as Playwright scripts
 Home Assistant installs only `browser-daemon-client` (which needs just `aiohttp`).
 Runs for a profile go to the node that has it.
 
-- **Connection:** enter the URL of any node, the cluster secret and the name of a browser
-  profile (default `hrworks`). Leave the URL empty to use the connection of the Browser
-  Daemon integration; nothing is stored then. The cluster secret can start runs, so
-  treat it like the employee password. Runs must be enabled on the node (`--run-node`).
-- **Profile:** create it once in browser-daemon. The integration signs in to it with the
-  saved employee login and TOTP URI and the profile's browser keeps the session. Do not
-  share that profile with other uses: a forced login clears its `hrworks.de` cookies.
-  Without a profile no login would survive, so the form requires one.
+- **Connection:** reuse the Home Assistant Browser Daemon integration, or enter
+  a node URL and cluster secret. Runs must be enabled on the selected node.
+  An optional node group restricts browser placement.
+- **Profile:** the integration creates `ha-hrworks` on first use. Existing profile
+  names are preserved; clear the field for a throwaway browser. Use a dedicated
+  employee profile: forced login clears its `hrworks.de` cookies.
+- **Authentication:** use direct employee credentials and an optional TOTP URI,
+  or select the Home Assistant rbw integration for fresh vault credentials.
+  See [Authentication](docs/authentication.md) for placement, vault policy and MFA.
 - **One tab:** the portal session lives in the tab that signed in, so the integration keeps
   that one tab (`keep_open`) and runs every operation in it. A TOTP challenge is finished
   in the same tab; a failed login or a logout closes it, and a tab which vanished counts as
@@ -72,6 +73,8 @@ to load with a Repairs notice: open the integration, choose **Reconfigure** and 
 the browser-daemon connection and profile. Entity IDs are kept.
 
 ## Installation
+
+Requires Home Assistant 2026.11 or later.
 
 1. Add this repository as an **Integration** repository in HACS, or install
    `custom_components/hrworks` using your existing submodule and symlink workflow.

@@ -242,6 +242,9 @@ class FakeDaemon:
     async def close_tab(self, _tab):
         pass
 
+    async def create_session(self, **_kwargs):
+        return {"id": "throwaway-session"}
+
     async def delete_session(self, _session, node=None):
         pass
 

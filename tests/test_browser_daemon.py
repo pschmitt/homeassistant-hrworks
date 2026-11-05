@@ -39,7 +39,11 @@ class FakeDaemon:
     def __init__(self):
         self.handlers = {}
         self.calls = []
+        self.local_node = "entry-node"
         self.close_tab = AsyncMock()
+        self.create_session = AsyncMock(return_value={"id": "throwaway"})
+        self.delete_session = AsyncMock()
+        self._json = AsyncMock()
         self.find_profile = AsyncMock(return_value={"name": "hrworks", "session_id": "s-1"})
         self.tabs = AsyncMock(return_value=[])
 
@@ -63,6 +67,100 @@ class LoginTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.daemon = FakeDaemon()
         self.client = BrowserDaemonClient(SETTINGS, daemon=self.daemon)
+
+    async def test_group_routes_login_and_cleanup_to_selected_node(self):
+        self.daemon._json = AsyncMock(return_value={"node": "worker"})
+        self.client = BrowserDaemonClient(
+            {**SETTINGS, "browser_daemon_node_group": " cloud "}, daemon=self.daemon
+        )
+        self.daemon.on("login", ok({"authenticated": True}, page="TAB1"))
+        self.daemon.on("logout", ok({"logged_out": True}))
+        await self.client.login("example", "employee", PASSWORD)
+        self.assertEqual(self.daemon.calls[0][1]["node"], "worker")
+        self.daemon._json.assert_awaited_once_with(
+            "POST",
+            "/api/mesh/placement",
+            json={"profile": "hrworks", "group": "cloud", "engine": "chromium", "create": True},
+            timeout=180,
+        )
+        await self.client.logout()
+        self.daemon.close_tab.assert_awaited_once_with("TAB1", node="worker")
+
+    async def test_profile_move_discards_tab_from_previous_node(self):
+        self.daemon._json = AsyncMock(side_effect=[{"node": "first"}, {"node": "second"}])
+        self.client = BrowserDaemonClient(
+            {**SETTINGS, "browser_daemon_node_group": "cloud"}, daemon=self.daemon
+        )
+        self.daemon.on("login", ok({"authenticated": True}, page="OLD_TAB"))
+        await self.client.login("example", "employee", PASSWORD)
+        self.daemon.on("login", ok({"authenticated": True}, page="NEW_TAB"))
+        await self.client.login("example", "employee", PASSWORD)
+        self.assertNotIn("tab", self.daemon.calls[-1][1])
+        self.assertEqual(self.daemon.calls[-1][1]["node"], "second")
+        self.assertEqual(self.client._tab, "NEW_TAB")
+
+    async def test_group_placement_precedes_tab_adoption(self):
+        self.daemon._json = AsyncMock(return_value={"node": "worker"})
+        self.client = BrowserDaemonClient(
+            {**SETTINGS, "browser_daemon_node_group": "cloud", "profile_id": IDENTITY},
+            daemon=self.daemon,
+        )
+        self.daemon.find_profile.return_value = {
+            "name": "hrworks",
+            "session_id": "s-1",
+            "node_name": "worker",
+        }
+
+        async def tabs(**kwargs):
+            self.daemon._json.assert_awaited_once()
+            return [{"id": "ADOPTED", "sessionId": "s-1", "url": "https://example.hrworks.de"}]
+
+        self.daemon.tabs.side_effect = tabs
+        self.daemon.on("account", ok({"metrics": {}, "period": None, "balance_basis": None}))
+        await self.client.account()
+        self.assertEqual(self.daemon.calls[-1][1]["tab"], "ADOPTED")
+        self.assertEqual(self.daemon.calls[-1][1]["node"], "worker")
+
+    async def test_group_refusal_does_not_run_on_another_node(self):
+        self.daemon._json = AsyncMock(side_effect=BrowserDaemonError("no matching node", 409))
+        self.client = BrowserDaemonClient(
+            {**SETTINGS, "browser_daemon_node_group": "cloud"}, daemon=self.daemon
+        )
+        with self.assertRaises(WorkerError):
+            await self.client.login("example", "employee", PASSWORD)
+        self.assertEqual(self.daemon.calls, [])
+
+    async def test_missing_named_profile_is_created_before_first_run(self):
+        self.daemon.find_profile.return_value = None
+        self.client = BrowserDaemonClient(
+            {**SETTINGS, "browser_daemon_profile": "ha-hrworks"}, daemon=self.daemon
+        )
+        self.daemon.on("probe", ok())
+        await self.client.health()
+        self.daemon._json.assert_awaited_once_with(
+            "POST",
+            "/api/profiles",
+            node=None,
+            json={"name": "ha-hrworks", "engine": "chromium"},
+        )
+        self.assertEqual(self.daemon.calls[0][1]["profile"], "ha-hrworks")
+
+    async def test_throwaway_login_and_mfa_keep_same_session_and_cleanup(self):
+        self.client = BrowserDaemonClient(
+            {**SETTINGS, "browser_daemon_profile": ""}, daemon=self.daemon
+        )
+        self.daemon.on("login", ok({"mfa_required": True}, page="TAB1"))
+        await self.client.login("example", "employee", PASSWORD)
+        await self.client.end_session()
+        self.daemon.delete_session.assert_not_awaited()
+        self.daemon.on("mfa", ok({"authenticated": True}, page="TAB1"))
+        await self.client.mfa("123456")
+        for _, call in self.daemon.calls:
+            self.assertEqual(call["session_id"], "throwaway")
+            self.assertNotIn("profile", call)
+        self.daemon.create_session.assert_awaited_once()
+        await self.client.end_session()
+        self.daemon.delete_session.assert_awaited_once_with("throwaway", node=None)
 
     async def test_identity_is_a_hash_of_company_and_user(self):
         self.daemon.on("login", ok({"authenticated": True}))
@@ -189,7 +287,7 @@ class LoginTests(unittest.IsolatedAsyncioTestCase):
         self.daemon.on("logout", ok({"logged_out": True}))
         await self.client.login("example", "employee", PASSWORD)
         await self.client.logout()
-        self.daemon.close_tab.assert_awaited_once_with("TAB1")
+        self.daemon.close_tab.assert_awaited_once_with("TAB1", node=None)
         self.assertIsNone(self.client._tab)
 
     async def test_after_a_restart_the_profiles_portal_tab_is_taken_over(self):

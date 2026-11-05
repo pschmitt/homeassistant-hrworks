@@ -130,6 +130,9 @@ class BrowserDaemonClient:
         self.capabilities: list[str] | None = None
         self.allow_writes = allow_writes
         self.browser_profile = (settings.get("browser_daemon_profile") or "").strip() or None
+        self.node_group = (settings.get("browser_daemon_node_group") or "").strip() or None
+        self._node: str | None = None
+        self._session: str | None = None
         self._http = http
         self._owns_http = False
         self._daemon = daemon
@@ -177,16 +180,21 @@ class BrowserDaemonClient:
 
         Skipped while an MFA code is awaited (the tab holds the pending login). Never raises.
         """
-        if not self.browser_profile or self._mfa_started is not None:
+        if self._mfa_started is not None:
             return
         async with self._lock:
             self._tab = None
             try:
                 client = self._client()
-                found = await client.find_profile(self.browser_profile)
-                session = (found or {}).get("session_id")
+                if self.browser_profile:
+                    found = await client.find_profile(self.browser_profile)
+                    session = (found or {}).get("session_id")
+                    node = (found or {}).get("node_name")
+                else:
+                    session, node = self._session, self._node
                 if session:
-                    await client.delete_session(session, node=(found or {}).get("node_name"))
+                    await client.delete_session(session, node=node)
+                self._session = None
             except (BrowserDaemonError, aiohttp.ClientError, TimeoutError, WorkerError):
                 pass
 
@@ -194,7 +202,7 @@ class BrowserDaemonClient:
         tab, self._tab, self._mfa_started = self._tab, None, None
         if tab:
             try:
-                await self._client().close_tab(tab)
+                await self._client().close_tab(tab, node=self._node)
             except (BrowserDaemonError, WorkerError):
                 pass
 
@@ -206,9 +214,11 @@ class BrowserDaemonClient:
             client = self._client()
             found = await client.find_profile(self.browser_profile)
             session = (found or {}).get("session_id")
-            if not session:
+            node = (found or {}).get("node_name")
+            if not session or (self.node_group and node != self._node):
                 return
-            for tab in await client.tabs(node=(found or {}).get("node_name")):
+            self._node = node
+            for tab in await client.tabs(node=node):
                 if (tab.get("sessionId") or tab.get("session_id")) != session:
                     continue
                 if tab.get("type", "page") == "page" and "hrworks.de" in str(tab.get("url", "")):
@@ -224,11 +234,55 @@ class BrowserDaemonClient:
         target = {"profile": self.browser_profile} if self.browser_profile else {}
         async with self._lock:
             self._connections += 1
-            if self._tab is None and operation not in {"probe", "login", "logout"}:
-                await self._adopt_tab()
-            if self._tab and operation not in {"probe", "logout"}:
-                options = {**options, "tab": self._tab, "keep_open": True}
             try:
+                if self.node_group and (self.browser_profile or self._session is None):
+                    if self._client().local_node is None:
+                        await self._client().overview()
+                    placed = await self._client()._json(
+                        "POST",
+                        "/api/mesh/placement",
+                        json={
+                            "profile": self.browser_profile,
+                            "group": self.node_group,
+                            "engine": "chromium",
+                            "create": True,
+                        },
+                        timeout=180,
+                    )
+                    if self._node is not None and self._node != placed["node"]:
+                        self._tab = self._mfa_started = None
+                        if operation == "mfa":
+                            raise WorkerError("session_expired")
+                    self._node = placed["node"]
+                if self.browser_profile:
+                    found = await self._client().find_profile(self.browser_profile)
+                    if not found:
+                        await self._client()._json(
+                            "POST",
+                            "/api/profiles",
+                            node=self._node,
+                            json={"name": self.browser_profile, "engine": "chromium"},
+                        )
+                    elif self._node is None:
+                        self._node = found.get("node_name")
+                else:
+                    if self._session is None:
+                        session = await self._client().create_session(
+                            node=self._node,
+                            persistent=False,
+                            engine="chromium",
+                            default_tabs=False,
+                            idle_timeout_minutes=10,
+                        )
+                        self._session = session["id"]
+                        self._node = session.get("node_name", self._node)
+                    target = {"session_id": self._session}
+                if self._node is not None:
+                    options = {**options, "node": self._node}
+                if self._tab is None and operation not in {"probe", "login", "logout"}:
+                    await self._adopt_tab()
+                if self._tab and operation not in {"probe", "logout"}:
+                    options = {**options, "tab": self._tab, "keep_open": True}
                 res = await self._client().run(
                     script=script(operation),
                     args=args or {},

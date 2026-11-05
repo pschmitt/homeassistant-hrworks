@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from urllib.parse import urlsplit
 
-import voluptuous as vol
+import probatio as vol
+from homeassistant import data_entry_flow
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.const import CONF_NAME, CONF_PASSWORD, CONF_SCAN_INTERVAL, CONF_USERNAME
 from homeassistant.core import callback
@@ -21,8 +22,9 @@ from homeassistant.helpers.selector import (
 )
 
 from .api import WorkerError, create_client
-from .auth import complete_mfa, secret_settings
+from .auth import complete_mfa, credentials, secret_settings
 from .const import (
+    CONF_BD_NODE_GROUP,
     CONF_BD_PROFILE,
     CONF_BD_SECRET,
     CONF_BD_URL,
@@ -32,6 +34,8 @@ from .const import (
     CONF_PAST_DAYS,
     CONF_PENDING,
     CONF_PROFILE,
+    CONF_RBW_ENTRY_ID,
+    CONF_RBW_ITEM_ID,
     CONF_SICKNESS,
     CONF_TOTP_URI,
     CONF_WRITES,
@@ -55,25 +59,48 @@ def connection_schema(defaults: dict) -> vol.Schema:
                 TextSelectorConfig(type=TextSelectorType.URL)
             ),
             vol.Optional(CONF_BD_SECRET): PASSWORD,
-            vol.Required(
-                CONF_BD_PROFILE, default=defaults.get(CONF_BD_PROFILE, "hrworks")
+            vol.Optional(
+                CONF_BD_NODE_GROUP, default=defaults.get(CONF_BD_NODE_GROUP, "")
+            ): TextSelector(),
+            vol.Optional(
+                CONF_BD_PROFILE, default=defaults.get(CONF_BD_PROFILE, "ha-hrworks")
             ): TextSelector(),
             vol.Optional(CONF_NAME, default=defaults.get(CONF_NAME, "HR WORKS")): TextSelector(),
         }
     )
 
 
-def account_schema(defaults: dict, *, existing: bool = False) -> vol.Schema:
-    password = vol.Optional(CONF_PASSWORD) if existing else vol.Required(CONF_PASSWORD)
+def account_schema(defaults: dict, *, existing: bool = False, hass=None) -> vol.Schema:
+    direct = {"field": CONF_RBW_ENTRY_ID, "value": ""}
+    password = data_entry_flow.Optional(CONF_PASSWORD, visible=direct)
+    entries = {"": "Disabled"}
+    if hass is not None:
+        entries.update(
+            {entry.entry_id: entry.title for entry in hass.config_entries.async_entries("rbw")}
+        )
+    if saved_entry := defaults.get(CONF_RBW_ENTRY_ID):
+        entries.setdefault(saved_entry, "Unavailable integration")
     return vol.Schema(
         {
             vol.Required(CONF_COMPANY, default=defaults.get(CONF_COMPANY, "")): TextSelector(),
             vol.Required(CONF_USERNAME, default=defaults.get(CONF_USERNAME, "")): TextSelector(),
             password: PASSWORD,
-            vol.Optional(CONF_TOTP_URI): PASSWORD,
-            vol.Optional(CONF_CODE): PASSWORD,
+            vol.Optional(CONF_RBW_ENTRY_ID, default=defaults.get(CONF_RBW_ENTRY_ID, "")): vol.In(
+                entries
+            ),
+            data_entry_flow.Optional(
+                CONF_RBW_ITEM_ID,
+                default=defaults.get(CONF_RBW_ITEM_ID, ""),
+                visible={"field": CONF_RBW_ENTRY_ID, "operator": "not_eq", "value": ""},
+            ): TextSelector(),
+            data_entry_flow.Optional(CONF_TOTP_URI, visible=direct): PASSWORD,
+            data_entry_flow.Optional(CONF_CODE, visible=direct): PASSWORD,
             **(
-                {vol.Optional("clear_totp", default=False): BooleanSelector()}
+                {
+                    data_entry_flow.Optional(
+                        "clear_totp", default=False, visible=direct
+                    ): BooleanSelector()
+                }
                 if defaults.get(CONF_TOTP_URI)
                 else {}
             ),
@@ -127,7 +154,8 @@ class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
             try:
                 settings = {key: value for key, value in user_input.items() if key != CONF_NAME}
                 settings[CONF_BD_URL] = str(settings.get(CONF_BD_URL) or "").strip()
-                required = (CONF_BD_PROFILE,)
+                settings.setdefault(CONF_BD_PROFILE, self._data.get(CONF_BD_PROFILE, "ha-hrworks"))
+                required = ()
                 if settings[CONF_BD_URL]:
                     # A blank secret keeps the saved one (reconfigure).
                     settings[CONF_BD_SECRET] = settings.get(CONF_BD_SECRET) or self._data.get(
@@ -169,7 +197,9 @@ class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             if self._mfa_pending:
                 try:
-                    self._data = await complete_mfa(self._client, self._data, user_input)
+                    self._data = await complete_mfa(
+                        self._client, self._data, user_input, hass=self.hass
+                    )
                 except InvalidTotp:
                     errors["base"] = "invalid_totp"
                 except WorkerError as err:
@@ -180,6 +210,18 @@ class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
             else:
                 company = user_input[CONF_COMPANY].strip()
                 username = user_input[CONF_USERNAME].strip()
+                selected = {
+                    **self._data,
+                    **{
+                        key: user_input[key]
+                        for key in (CONF_RBW_ENTRY_ID, CONF_RBW_ITEM_ID)
+                        if key in user_input
+                    },
+                    CONF_COMPANY: company,
+                    CONF_USERNAME: username,
+                }
+                if user_input.get(CONF_RBW_ENTRY_ID) == "":
+                    selected[CONF_RBW_ITEM_ID] = ""
                 password = user_input.get(CONF_PASSWORD) or self._data.get(CONF_PASSWORD)
                 if (
                     self._entry
@@ -190,12 +232,19 @@ class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
                     )
                 ):
                     errors["base"] = "different_account"
-                elif not password:
+                elif bool(selected.get(CONF_RBW_ENTRY_ID)) != bool(selected.get(CONF_RBW_ITEM_ID)):
+                    errors["base"] = "rbw_incomplete"
+                elif not password and not selected.get(CONF_RBW_ENTRY_ID):
                     errors["base"] = "invalid_auth"
                 else:
                     try:
-                        settings = secret_settings(self._data, user_input)
-                        result = await self._client.login(company, username, password, force=True)
+                        settings = secret_settings(selected, user_input)
+                        resolved = await credentials(
+                            self.hass, {**settings, CONF_PASSWORD: password}
+                        )
+                        result = await self._client.login(
+                            company, resolved[CONF_USERNAME], resolved[CONF_PASSWORD], force=True
+                        )
                     except InvalidTotp:
                         errors["base"] = "invalid_totp"
                     except WorkerError as err:
@@ -206,18 +255,29 @@ class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
                             {
                                 CONF_COMPANY: company,
                                 CONF_USERNAME: username,
-                                CONF_PASSWORD: password,
+                                **(
+                                    {CONF_PASSWORD: password}
+                                    if not settings.get(CONF_RBW_ENTRY_ID)
+                                    else {}
+                                ),
                                 CONF_PROFILE: result["profile_id"],
                             }
                         )
+                        if settings.get(CONF_RBW_ENTRY_ID):
+                            self._data.pop(CONF_PASSWORD, None)
+                            self._data.pop(CONF_TOTP_URI, None)
                         if result.get("mfa_required"):
                             self._mfa_pending = True
-                            if not user_input.get(CONF_CODE) and not self._data.get(CONF_TOTP_URI):
+                            if (
+                                not user_input.get(CONF_CODE)
+                                and not self._data.get(CONF_TOTP_URI)
+                                and not self._data.get(CONF_RBW_ENTRY_ID)
+                            ):
                                 errors["base"] = "mfa_required"
                             else:
                                 try:
                                     self._data = await complete_mfa(
-                                        self._client, self._data, user_input
+                                        self._client, self._data, user_input, hass=self.hass
                                     )
                                 except InvalidTotp:
                                     errors["base"] = "invalid_totp"
@@ -230,7 +290,9 @@ class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
                             return await self._finish()
         return self.async_show_form(
             step_id="account",
-            data_schema=account_schema(self._data, existing=self._entry is not None),
+            data_schema=account_schema(
+                self._data, existing=self._entry is not None, hass=self.hass
+            ),
             errors=errors,
         )
 

@@ -8,6 +8,9 @@ CONF_COMPANY = "company_id"
 CONF_BD_URL = "browser_daemon_url"
 CONF_BD_SECRET = "browser_daemon_secret"
 CONF_BD_PROFILE = "browser_daemon_profile"
+CONF_BD_NODE_GROUP = "browser_daemon_node_group"
+CONF_RBW_ENTRY_ID = "rbw_entry_id"
+CONF_RBW_ITEM_ID = "rbw_item_id"
 # Keys of the removed SSH worker backend, dropped from old entries on migration.
 LEGACY_KEYS = (
     "backend",

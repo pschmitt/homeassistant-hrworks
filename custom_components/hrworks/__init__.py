@@ -87,7 +87,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: HrworksConfigEntry) -> bool:
-    if not entry.data.get(CONF_BD_PROFILE):
+    if CONF_BD_PROFILE not in entry.data:
         create_issue(hass, entry, "reconfigure_required")
         raise ConfigEntryError(translation_domain=DOMAIN, translation_key="reconfigure_required")
     if ir.async_get(hass).async_get_issue(DOMAIN, f"{entry.entry_id}_write_uncertain"):

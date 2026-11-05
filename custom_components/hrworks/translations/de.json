@@ -8,7 +8,8 @@
         "data": {
           "browser_daemon_url": "browser-daemon-URL",
           "browser_daemon_secret": "Cluster-Geheimnis",
-          "browser_daemon_profile": "Browser-Profil",
+          "browser_daemon_profile": "Browser-Profil (Standard: ha-hrworks; leer: temporär)",
+          "browser_daemon_node_group": "Browser-Daemon-Knotengruppe (optional)",
           "name": "Gerätename"
         }
       },
@@ -18,16 +19,19 @@
         "data": {
           "browser_daemon_url": "browser-daemon-URL",
           "browser_daemon_secret": "Cluster-Geheimnis",
-          "browser_daemon_profile": "Browser-Profil",
+          "browser_daemon_profile": "Browser-Profil (Standard: ha-hrworks; leer: temporär)",
+          "browser_daemon_node_group": "Browser-Daemon-Knotengruppe (optional)",
           "name": "Gerätename"
         }
       },
       "account": {
         "title": "Dein Mitarbeiterkonto",
-        "description": "Verwende deinen Mitarbeiter-Login. In der Neukonfiguration können Firma, Benutzer und Passwort geändert werden. Leere Geheimnisfelder behalten den gespeicherten Wert. Eine gespeicherte TOTP-URI wird automatisch verwendet; gib bei Bedarf hier einen sechsstelligen Code ein.",
+        "description": "Verwende deine Mitarbeiteranmeldung mit Passwort und optionaler TOTP-URI oder wähle eine rbw-Integration und Eintrags-ID. rbw liefert aktuelle Benutzernamen, Passwörter und Authenticator-Codes; der Benutzername muss übereinstimmen. Für direkte Anmeldedaten beide rbw-Felder leer lassen. Leere direkte Geheimnisfelder behalten gespeicherte Werte.",
         "data": {
           "company_id": "Firmenkennung",
           "username": "Benutzerkennung",
+          "rbw_entry_id": "rbw-Integration (optional)",
+          "rbw_item_id": "rbw-Eintrags-ID des Mitarbeiterkontos (optional)",
           "password": "Passwort",
           "totp_uri": "TOTP-URI (optional)",
           "clear_totp": "Gespeicherte TOTP-URI entfernen",
@@ -52,7 +56,9 @@
       "invalid_request": "Die Anfrage wurde abgelehnt. Prüfe URL, Cluster-Geheimnis und Profil.",
       "unknown": "Ein unerwarteter Fehler ist aufgetreten.",
       "invalid_totp": "Ungültige TOTP-URI. Verwende otpauth://totp/... mit einem Base32-Geheimnis und sechs Stellen.",
-      "login_timeout": "Die HR-WORKS-Anmeldung hat zu lange gedauert. Prüfe das Portal und versuche es erneut."
+      "login_timeout": "Die HR-WORKS-Anmeldung hat zu lange gedauert. Prüfe das Portal und versuche es erneut.",
+      "rbw_incomplete": "Wähle rbw-Integration und Eintrags-ID oder lasse beide Felder für direkte Anmeldedaten leer.",
+      "rbw_unavailable": "Das gewählte rbw-Konto konnte nicht gelesen werden. Entsperre den Tresor und prüfe die Berechtigungen für Eintrag und Felder."
     },
     "abort": {
       "already_configured": "Dieses Mitarbeiterkonto ist bereits eingerichtet.",
@@ -188,7 +194,7 @@
         "step": {
           "login": {
             "title": "Erneut anmelden",
-            "description": "Fahre mit der gespeicherten Mitarbeiteranmeldung fort. Eine gespeicherte TOTP-URI wird automatisch verwendet. Gib bei Bedarf einen sechsstelligen Code ein oder ersetze hier die URI.",
+            "description": "Fahre mit der konfigurierten Mitarbeiteranmeldung fort. Bei ausgewähltem rbw werden aktuelle Anmeldedaten und Authenticator-Codes abgerufen; andernfalls werden gespeichertes Passwort und TOTP-URI verwendet. Gib bei Bedarf einen sechsstelligen Code ein. Die Quelle der Anmeldedaten lässt sich über Neu konfigurieren ändern.",
             "data": {
               "password": "Passwort",
               "totp_uri": "TOTP-URI (optional)",
@@ -214,7 +220,9 @@
           "invalid_request": "Die Anfrage wurde abgelehnt. Prüfe URL, Cluster-Geheimnis und Profil.",
           "unknown": "Ein unerwarteter Fehler ist aufgetreten.",
           "invalid_totp": "Ungültige TOTP-URI. Verwende otpauth://totp/... mit einem Base32-Geheimnis und sechs Stellen.",
-          "login_timeout": "Die HR-WORKS-Anmeldung hat zu lange gedauert. Prüfe das Portal und versuche es erneut."
+          "login_timeout": "Die HR-WORKS-Anmeldung hat zu lange gedauert. Prüfe das Portal und versuche es erneut.",
+          "rbw_incomplete": "Wähle rbw-Integration und Eintrags-ID oder lasse beide Felder für direkte Anmeldedaten leer.",
+          "rbw_unavailable": "Das gewählte rbw-Konto konnte nicht gelesen werden. Entsperre den Tresor und prüfe die Berechtigungen für Eintrag und Felder."
         },
         "abort": {
           "entry_removed": "Der Integrationseintrag wurde entfernt.",

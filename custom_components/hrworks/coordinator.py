@@ -16,6 +16,7 @@ from homeassistant.util import dt as dt_util
 from .api import WorkerError
 from .auth import authenticate
 from .const import (
+    CONF_BD_PROFILE,
     CONF_FUTURE_DAYS,
     CONF_PAST_DAYS,
     CONF_PENDING,
@@ -175,6 +176,9 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
                 "invalid_auth",
                 "invalid_code",
                 "login_timeout",
+                "rbw_unavailable",
+                "rbw_incomplete",
+                "different_account",
             }:
                 LOGGER.warning(
                     "HR WORKS refresh still requires authentication (error=%s); raising repair",
@@ -259,22 +263,22 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
             if self._auth_recovery_blocked:
                 LOGGER.debug("HR WORKS automatic login retries exhausted; waiting for Repairs")
                 raise
-            if not self.entry.data.get(CONF_TOTP_URI):
+            if not self.entry.data.get(CONF_TOTP_URI) and not self.entry.data.get("rbw_entry_id"):
                 self._auth_recovery_blocked = True
                 LOGGER.warning(
                     "HR WORKS session requires authentication (error=%s); "
-                    "automatic recovery skipped because no TOTP URI is saved",
+                    "automatic recovery skipped because neither TOTP nor rbw is configured",
                     err.code,
                 )
                 raise
             LOGGER.debug(
                 "HR WORKS session requires authentication (error=%s); "
-                "trying automatic recovery with saved TOTP",
+                "trying automatic recovery with the configured credential source",
                 err.code,
             )
         for attempt in range(len(LOGIN_RETRY_DELAYS) + 1):
             try:
-                await authenticate(self.client, self.entry.data, force=True)
+                await authenticate(self.client, self.entry.data, force=True, hass=self.hass)
                 break
             except InvalidTotp:
                 self._auth_recovery_blocked = True
@@ -289,6 +293,9 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
                         "unsupported_mfa",
                         "session_expired",
                         "login_timeout",
+                        "rbw_unavailable",
+                        "rbw_incomplete",
+                        "different_account",
                     }:
                         self._auth_recovery_blocked = True
                     stage = (
@@ -333,7 +340,10 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
             sessions = await client.async_list_sessions()
             recovered = False
             for s in sessions:
-                if s.get("profile") == "hrworks":
+                if (
+                    self.entry.data.get(CONF_BD_PROFILE)
+                    and s.get("profile") == self.entry.data[CONF_BD_PROFILE]
+                ):
                     LOGGER.info(
                         "Terminating hung hrworks session %s via browser-daemon to unblock worker",
                         s.get("id"),

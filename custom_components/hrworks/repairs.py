@@ -1,12 +1,12 @@
 """Complete employee MFA directly from the Home Assistant Repairs screen."""
 
-import voluptuous as vol
+import probatio as vol
 from homeassistant.components.repairs import RepairsFlow
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.helpers import issue_registry as ir
 
 from .api import WorkerError, create_client
-from .auth import complete_mfa, secret_settings
+from .auth import complete_mfa, credentials, secret_settings
 from .config_flow import account_schema, mfa_schema
 from .const import CONF_COMPANY, CONF_TOTP_URI, DOMAIN
 from .coordinator import clear_issues
@@ -31,17 +31,19 @@ class EmployeeLoginRepair(RepairsFlow):
         if user_input is not None:
             try:
                 if self._mfa_pending:
-                    settings = await complete_mfa(self.client, self.settings, user_input)
+                    settings = await complete_mfa(
+                        self.client, self.settings, user_input, hass=self.hass
+                    )
                 else:
                     if self.client:
                         await self.client.close()
                     self.client = create_client(self.hass, entry.data)
                     settings = secret_settings(entry.data, user_input)
-                    password = user_input.get(CONF_PASSWORD) or entry.data[CONF_PASSWORD]
+                    resolved = await credentials(self.hass, settings)
                     result = await self.client.login(
-                        entry.data[CONF_COMPANY],
-                        entry.data[CONF_USERNAME],
-                        password,
+                        resolved[CONF_COMPANY],
+                        resolved[CONF_USERNAME],
+                        resolved[CONF_PASSWORD],
                         force=True,
                     )
                     # Never change the employee identity as part of a repair.
@@ -50,10 +52,16 @@ class EmployeeLoginRepair(RepairsFlow):
                     if result.get("mfa_required"):
                         self.settings = settings
                         self._mfa_pending = True
-                        if not user_input.get("code") and not settings.get(CONF_TOTP_URI):
+                        if (
+                            not user_input.get("code")
+                            and not settings.get(CONF_TOTP_URI)
+                            and not settings.get("rbw_entry_id")
+                        ):
                             errors["base"] = "mfa_required"
                             return self._show_login_form(entry, errors)
-                        settings = await complete_mfa(self.client, settings, user_input)
+                        settings = await complete_mfa(
+                            self.client, settings, user_input, hass=self.hass
+                        )
                 self.settings = settings
             except InvalidTotp:
                 errors["base"] = "invalid_totp"
@@ -67,9 +75,16 @@ class EmployeeLoginRepair(RepairsFlow):
         """Keep credentials and MFA input together in the repair form."""
         fields = {
             key: value
-            for key, value in account_schema(entry.data, existing=True).schema.items()
-            if str(key) not in {CONF_COMPANY, CONF_USERNAME}
+            for key, value in account_schema(
+                entry.data, existing=True, hass=self.hass
+            ).schema.items()
+            if str(key) not in {CONF_COMPANY, CONF_USERNAME, "rbw_entry_id", "rbw_item_id"}
         }
+        if entry.data.get("rbw_entry_id"):
+            fields = {}
+        for key in fields:
+            if hasattr(key, "visible"):
+                key.visible = None
         fields.update(
             {key: value for key, value in mfa_schema().schema.items() if str(key) == "code"}
         )
