@@ -73,8 +73,11 @@ the browser-daemon connection and profile. Entity IDs are kept.
 
 ## Installation
 
-1. Add this repository as an **Integration** repository in HACS, or install
-   `custom_components/hrworks` using your existing submodule and symlink workflow.
+[![Open this integration in Home Assistant Marketplace](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=pschmitt&repository=homeassistant-hrworks&category=integration)
+
+1. Click the badge above to add this repository. For older installations, add it
+   as an **Integration** repository in HACS, or install `custom_components/hrworks`
+   using your existing submodule and symlink workflow.
 2. Restart HA and add **HR WORKS** under Settings → Devices & services.
 3. Enter the browser-daemon URL, cluster secret and profile (or leave URL and secret
    empty to use the Browser Daemon integration).
