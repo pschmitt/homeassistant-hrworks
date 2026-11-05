@@ -47,6 +47,8 @@ from .const import (
 from .totp import InvalidTotp
 
 PASSWORD = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
+# Empty radio values cannot be selected reliably by the HA frontend.
+RBW_DISABLED = "disabled"
 
 
 def connection_schema(defaults: dict) -> vol.Schema:
@@ -71,9 +73,9 @@ def connection_schema(defaults: dict) -> vol.Schema:
 
 
 def account_schema(defaults: dict, *, existing: bool = False, hass=None) -> vol.Schema:
-    direct = {"field": CONF_RBW_ENTRY_ID, "value": ""}
+    direct = {"field": CONF_RBW_ENTRY_ID, "value": RBW_DISABLED}
     password = data_entry_flow.Optional(CONF_PASSWORD, visible=direct)
-    entries = {"": "Disabled"}
+    entries = {RBW_DISABLED: "Disabled"}
     if hass is not None:
         entries.update(
             {entry.entry_id: entry.title for entry in hass.config_entries.async_entries("rbw")}
@@ -85,13 +87,13 @@ def account_schema(defaults: dict, *, existing: bool = False, hass=None) -> vol.
             vol.Required(CONF_COMPANY, default=defaults.get(CONF_COMPANY, "")): TextSelector(),
             vol.Required(CONF_USERNAME, default=defaults.get(CONF_USERNAME, "")): TextSelector(),
             password: PASSWORD,
-            vol.Optional(CONF_RBW_ENTRY_ID, default=defaults.get(CONF_RBW_ENTRY_ID, "")): vol.In(
-                entries
-            ),
+            vol.Optional(
+                CONF_RBW_ENTRY_ID, default=defaults.get(CONF_RBW_ENTRY_ID) or RBW_DISABLED
+            ): vol.In(entries),
             data_entry_flow.Optional(
                 CONF_RBW_ITEM_ID,
                 default=defaults.get(CONF_RBW_ITEM_ID, ""),
-                visible={"field": CONF_RBW_ENTRY_ID, "operator": "not_eq", "value": ""},
+                visible={"field": CONF_RBW_ENTRY_ID, "operator": "not_eq", "value": RBW_DISABLED},
             ): TextSelector(),
             data_entry_flow.Optional(CONF_TOTP_URI, visible=direct): PASSWORD,
             data_entry_flow.Optional(CONF_CODE, visible=direct): PASSWORD,
@@ -195,6 +197,8 @@ class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_account(self, user_input: dict | None = None) -> ConfigFlowResult:
         errors = {}
         if user_input is not None:
+            if user_input.get(CONF_RBW_ENTRY_ID) in ("", RBW_DISABLED):
+                user_input = {**user_input, CONF_RBW_ENTRY_ID: "", CONF_RBW_ITEM_ID: ""}
             if self._mfa_pending:
                 try:
                     self._data = await complete_mfa(
@@ -220,8 +224,6 @@ class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_COMPANY: company,
                     CONF_USERNAME: username,
                 }
-                if user_input.get(CONF_RBW_ENTRY_ID) == "":
-                    selected[CONF_RBW_ITEM_ID] = ""
                 password = user_input.get(CONF_PASSWORD) or self._data.get(CONF_PASSWORD)
                 if (
                     self._entry

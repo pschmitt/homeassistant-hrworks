@@ -1,5 +1,6 @@
 """Exercise real HA flow classes with a fake worker, never real HR records."""
 
+import json
 import unittest
 from datetime import timedelta
 from types import SimpleNamespace
@@ -10,6 +11,7 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 from custom_components.hrworks.api import WorkerError
 from custom_components.hrworks.auth import authenticate, complete_mfa, credentials, secret_settings
 from custom_components.hrworks.config_flow import (
+    RBW_DISABLED,
     HrworksConfigFlow,
     account_schema,
     connection_schema,
@@ -55,12 +57,30 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
 
     def test_account_fields_depend_on_vault_selection(self):
         markers = {key.schema: key for key in account_schema({}).schema}
-        self.assertEqual(markers["password"].visible, {"field": "rbw_entry_id", "value": ""})
+        self.assertEqual(
+            markers["password"].visible, {"field": "rbw_entry_id", "value": RBW_DISABLED}
+        )
         self.assertEqual(markers["totp_uri"].visible, markers["password"].visible)
         self.assertEqual(
             markers["rbw_item_id"].visible,
-            {"field": "rbw_entry_id", "operator": "not_eq", "value": ""},
+            {"field": "rbw_entry_id", "operator": "not_eq", "value": RBW_DISABLED},
         )
+
+    def test_account_vault_defaults_map_only_disabled_values(self):
+        for defaults, expected in (
+            ({}, RBW_DISABLED),
+            ({"rbw_entry_id": ""}, RBW_DISABLED),
+            ({"rbw_entry_id": None}, RBW_DISABLED),
+            ({"rbw_entry_id": "saved-vault"}, "saved-vault"),
+        ):
+            with self.subTest(defaults=defaults):
+                schema = account_schema(defaults)
+                markers = {key.schema: key for key in schema.schema}
+                self.assertEqual(markers["rbw_entry_id"].default(), expected)
+                self.assertEqual(
+                    schema({"company_id": "example", "username": "employee"})["rbw_entry_id"],
+                    expected,
+                )
 
     def test_native_visibility_serializes_and_strips_hidden_credentials(self):
         import probatio
@@ -78,7 +98,18 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
         fields = probatio.to_field_list(schema, custom_serializer=cv.custom_serializer)
         add_visible_conditions_to_serialized_schema(schema, fields)
         password = next(field for field in fields if field["name"] == "password")
-        self.assertEqual(password["visible"], {"field": "rbw_entry_id", "value": ""})
+        self.assertEqual(password["visible"], {"field": "rbw_entry_id", "value": RBW_DISABLED})
+        vault = next(field for field in fields if field["name"] == "rbw_entry_id")
+        options = json.dumps(vault["options"])
+        self.assertIn('"disabled"', options)
+        self.assertIn('"Disabled"', options)
+        self.assertIn('"vault"', options)
+        self.assertNotIn('""', options)
+        item = next(field for field in fields if field["name"] == "rbw_item_id")
+        self.assertEqual(
+            item["visible"],
+            {"field": "rbw_entry_id", "operator": "not_eq", "value": RBW_DISABLED},
+        )
         vault_input = {
             "company_id": "example",
             "username": "employee",
@@ -97,18 +128,41 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
                 "company_id": "example",
                 "username": "employee",
                 "password": "direct",
-                "rbw_entry_id": "",
+                "rbw_entry_id": RBW_DISABLED,
                 "rbw_item_id": "stale-item",
+                "totp_uri": URI,
+                "code": "123456",
             },
         )
-        self.assertNotIn("rbw_item_id", direct_schema(direct_input))
+        direct = direct_schema(direct_input)
+        self.assertNotIn("rbw_item_id", direct)
+        self.assertEqual(direct["password"], "direct")
+        self.assertEqual(direct["totp_uri"], URI)
+        self.assertEqual(direct["code"], "123456")
+        self.assertEqual(direct["rbw_entry_id"], RBW_DISABLED)
 
     async def test_disabling_vault_clears_hidden_old_item(self):
-        flow = self.flow(data={**DATA, "rbw_entry_id": "old-vault", "rbw_item_id": "old-item"})
-        flow._client.login.return_value = {"profile_id": "b" * 64, "authenticated": True}
-        result = await flow.async_step_account({**DATA, "rbw_entry_id": ""})
-        self.assertEqual(result["type"], "done")
-        self.assertEqual(flow._data["rbw_item_id"], "")
+        for source in ("user", "reconfigure", "reauth"):
+            for disabled in ("", RBW_DISABLED):
+                for hidden in ({}, {"rbw_item_id": "stale-item"}):
+                    with self.subTest(source=source, disabled=disabled, hidden=hidden):
+                        flow = self.flow(
+                            source,
+                            data={**DATA, "rbw_entry_id": "old-vault", "rbw_item_id": "old-item"},
+                        )
+                        flow._client.login.return_value = {
+                            "profile_id": "b" * 64,
+                            "authenticated": True,
+                        }
+                        supplied = {**DATA, "rbw_entry_id": disabled, **hidden}
+                        result = await flow.async_step_account(supplied)
+                        self.assertEqual(result["type"], "done")
+                        self.assertEqual(flow._data["rbw_entry_id"], "")
+                        self.assertEqual(flow._data["rbw_item_id"], "")
+                        self.assertEqual(supplied["rbw_entry_id"], disabled)
+                        flow._client.login.assert_awaited_once_with(
+                            "example", "employee", "test-password", force=True
+                        )
 
     async def test_rbw_reads_fresh_password_and_current_code_per_attempt(self):
         settings = {**DATA, "rbw_entry_id": "vault", "rbw_item_id": "item"}
