@@ -66,15 +66,22 @@ async ({ page, args }, H) => {
     }
   }
 
-  // Wait up to 10s for cachedEvents to populate
-  for (let i = 0; i < 20; i++) {
+  // Wait up to 20s for cachedEvents and resources to populate
+  for (let i = 0; i < 40; i++) {
     const ready = await page.evaluate(() => {
       const keys = Object.keys(window).filter((k) => k.includes('cachedEvents'));
       if (!keys.length) return false;
       const cached = window[keys[0]];
-      return cached && Array.isArray(cached.cachedCalendarEvents);
+      if (!cached) return false;
+      if (cached.clwLoading || cached.clwLoadingResources) return false;
+      const hasDomResources = document.querySelectorAll('.me-full-calendar .fc-resource-area tr[data-resource-id]').length > 0;
+      const hasCachedResources = Array.isArray(cached.resources) && cached.resources.length > 0;
+      return hasDomResources || hasCachedResources;
     }).catch(() => false);
-    if (ready) break;
+    if (ready) {
+      await sleep(1000);
+      break;
+    }
     await sleep(500);
   }
 
