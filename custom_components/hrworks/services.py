@@ -7,6 +7,7 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
 from .api import WorkerError
+from .auth import authenticate
 from .const import CONF_WRITES, DOMAIN
 from .coordinator import create_issue
 from .hrworks.models import TYPES
@@ -113,11 +114,19 @@ def register_services(hass) -> None:
                 translation_domain=DOMAIN, translation_key="select_account"
             )
         entry = candidates[0]
+        coord = entry.runtime_data
+        cal_opts = {key: value for key, value in call.data.items() if key != "config_entry_id"}
         try:
-            return await entry.runtime_data.client.team_calendar(
-                {key: value for key, value in call.data.items() if key != "config_entry_id"}
-            )
+            return await coord.client.team_calendar(cal_opts)
         except WorkerError as err:
+            if err.code == "session_expired":
+                try:
+                    await authenticate(coord.client, entry.data, force=True, hass=hass)
+                    return await coord.client.team_calendar(cal_opts)
+                except Exception as rec_err:
+                    raise HomeAssistantError(
+                        f"calendar_failed: auth_recovery_failed ({rec_err})"
+                    ) from rec_err
             raise HomeAssistantError(
                 f"calendar_failed: {err.code} (stage={err.stage}, detail={err.detail})"
             ) from err
