@@ -51,3 +51,13 @@ get_team_absences:
       example: "2026-11-06"
       selector:
         text:
+get_company_absences:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: hrworks
+    units:
+      example: '["OpenStack", "K8s"]'
+      selector:
+        object:

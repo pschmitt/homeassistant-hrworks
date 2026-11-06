@@ -40,6 +40,7 @@ OPERATIONS = (
     "record",
     "assist",
     "team_calendar",
+    "company_absences",
     "logout",
 )
 # Seconds a run may take, per operation .
@@ -48,6 +49,7 @@ TIMEOUTS = {
     "record": 150,
     "assist": 170,
     "team_calendar": 120,
+    "company_absences": 300,
     "login": 90,
     "day": 90,
     "account": 90,
@@ -502,6 +504,14 @@ class BrowserDaemonClient:
         """Fetch team/company absence calendar."""
         self._path()
         res = await self._run("team_calendar", options or {})
+        if not isinstance(res.result, dict):
+            raise WorkerError("portal_changed")
+        return res.result
+
+    async def company_absences(self, options: dict | None = None) -> dict:
+        """Fetch absences of a batch of organizational units (or list the units)."""
+        self._path()
+        res = await self._run("company_absences", options or {})
         if not isinstance(res.result, dict):
             raise WorkerError("portal_changed")
         return res.result

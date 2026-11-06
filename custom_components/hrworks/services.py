@@ -98,7 +98,7 @@ def register_services(hass) -> None:
         schema=vol.Schema({vol.Optional("config_entry_id"): cv.string}),
     )
 
-    async def get_team_absences(call):
+    async def _calendar(call, method: str):
         candidates = [
             e
             for e in hass.config_entries.async_entries(DOMAIN)
@@ -113,14 +113,15 @@ def register_services(hass) -> None:
             )
         entry = candidates[0]
         coord = entry.runtime_data
-        cal_opts = {key: value for key, value in call.data.items() if key != "config_entry_id"}
+        opts = {key: value for key, value in call.data.items() if key != "config_entry_id"}
+        fetch = getattr(coord.client, method)
         try:
-            return await coord.client.team_calendar(cal_opts)
+            return await fetch(opts)
         except WorkerError as err:
             if err.code == "session_expired":
                 try:
                     await authenticate(coord.client, entry.data, force=True, hass=hass)
-                    return await coord.client.team_calendar(cal_opts)
+                    return await fetch(opts)
                 except Exception as rec_err:
                     raise HomeAssistantError(
                         f"calendar_failed: auth_recovery_failed ({rec_err})"
@@ -128,6 +129,12 @@ def register_services(hass) -> None:
             raise HomeAssistantError(
                 f"calendar_failed: {err.code} (stage={err.stage}, detail={err.detail})"
             ) from err
+
+    async def get_team_absences(call):
+        return await _calendar(call, "team_calendar")
+
+    async def get_company_absences(call):
+        return await _calendar(call, "company_absences")
 
     hass.services.async_register(
         DOMAIN,
@@ -138,6 +145,19 @@ def register_services(hass) -> None:
                 vol.Optional("config_entry_id"): cv.string,
                 vol.Optional("organizational_unit"): cv.string,
                 vol.Optional("date"): cv.string,
+            }
+        ),
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        "get_company_absences",
+        get_company_absences,
+        schema=vol.Schema(
+            {
+                vol.Optional("config_entry_id"): cv.string,
+                vol.Optional("units"): vol.All(cv.ensure_list, [cv.string]),
             }
         ),
         supports_response=SupportsResponse.ONLY,
