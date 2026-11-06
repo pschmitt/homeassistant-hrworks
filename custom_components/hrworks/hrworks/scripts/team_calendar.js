@@ -17,7 +17,7 @@ async ({ page, args }, H) => {
     await page.locator('body').waitFor({ timeout: 45000 });
   }
 
-  if (H.onLoginPage(page)) throw new PortalError('session_expired');
+  if (page.url().includes('login.hrworks.de')) throw new PortalError('session_expired');
 
   // Wait for calendar to be visible
   const cal = page.locator('.me-full-calendar').first();
