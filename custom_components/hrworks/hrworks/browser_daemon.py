@@ -70,6 +70,10 @@ def _read(name: str) -> str:
     return (SCRIPT_DIR / f"{name}.js").read_text(encoding="utf-8").strip()
 
 
+HELPERS = _read("helpers")
+SOURCES = {name: _read(name) for name in OPERATIONS}
+
+
 def script(operation: str) -> str:
     """One function expression: the shared helpers, then the operation called with them."""
     return (
