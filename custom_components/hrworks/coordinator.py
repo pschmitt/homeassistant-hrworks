@@ -242,7 +242,8 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
             self._reloads.pop(f"{entry_id}_last_auto_reload", None)
         clear_issues(self.hass, self.entry)
         data["work_days"] = await self._work_days(data)
-        self._snapshot_store.async_delay_save(lambda: data, 1)
+        if store := getattr(self, "_snapshot_store", None):
+            store.async_delay_save(lambda: data, 1)
         return data
 
     async def _work_days(self, data: dict) -> list[dict]:

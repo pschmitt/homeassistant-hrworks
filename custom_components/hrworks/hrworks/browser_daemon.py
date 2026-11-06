@@ -293,9 +293,6 @@ class BrowserDaemonClient:
                 if options.get("keep_open") and res.page:
                     self._tab = res.page
             except (BrowserDaemonError, aiohttp.ClientError, TimeoutError) as err:
-                if isinstance(err, RunError):
-                    import logging
-                    logging.getLogger(__name__).warning("HRWORKS RUN ERROR: %s", err.run.error)
                 if isinstance(err, RunError) and "not found in the session" in (
                     err.run.error or ""
                 ):
