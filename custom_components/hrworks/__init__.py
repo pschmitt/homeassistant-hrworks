@@ -14,6 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 
 from .api import WorkerError, create_client
@@ -98,12 +99,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: HrworksConfigEntry) -> b
         raise ConfigEntryNotReady(translation_domain=DOMAIN, translation_key=err.code) from err
     coordinator = HrworksCoordinator(hass, entry, client)
     entry.runtime_data = coordinator
+    await coordinator.async_restore_snapshot()
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_reload))
     register_services(hass)
     # The first snapshot drives a remote browser and can take a minute.
     # Home Assistant's startup waits for every integration's setup, so fetch it
-    # in the background; entities stay unavailable until it completes. Auth
+    # in the background; entities show the last saved snapshot (if any) until it completes. Auth
     # auth failures create a Repairs issue without blocking startup.
     entry.async_create_background_task(hass, coordinator.async_refresh(), f"{DOMAIN} first refresh")
     return True
@@ -122,3 +124,5 @@ async def async_unload_entry(hass: HomeAssistant, entry: HrworksConfigEntry) -> 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     clear_issues(hass, entry, include_writes=True)
+    for name in ("snapshot", "days"):
+        await Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.{name}").async_remove()

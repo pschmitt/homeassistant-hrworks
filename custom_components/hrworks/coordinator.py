@@ -87,6 +87,7 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
         self._auth_recovery_blocked = False
         self._days_store = Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.days")
         self._days: dict | None = None
+        self._snapshot_store = Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.snapshot")
         # Operational counters for the diagnostic sensors (kept while HA runs).
         self.last_duration: float | None = None
         self.last_finished: datetime | None = None
@@ -110,6 +111,18 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
         if self.last_finished is None or self.update_interval is None:
             return None
         return self.last_finished + self.update_interval
+
+    async def async_restore_snapshot(self) -> bool:
+        """Show the last known snapshot until the first refresh completes (e.g. after a restart)."""
+        try:
+            saved = await self._snapshot_store.async_load()
+        except Exception as err:  # corrupt storage must never block setup
+            LOGGER.warning("HR WORKS could not read the saved snapshot: %r", err)
+            return False
+        if not isinstance(saved, dict) or not saved.get("today"):
+            return False
+        self.data = saved
+        return True
 
     async def _async_update_data(self) -> dict:
         started = time.monotonic()
@@ -229,6 +242,7 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
             self._reloads.pop(f"{entry_id}_last_auto_reload", None)
         clear_issues(self.hass, self.entry)
         data["work_days"] = await self._work_days(data)
+        self._snapshot_store.async_delay_save(lambda: data, 1)
         return data
 
     async def _work_days(self, data: dict) -> list[dict]:
