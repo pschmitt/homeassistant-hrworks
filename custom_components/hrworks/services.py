@@ -98,3 +98,40 @@ def register_services(hass) -> None:
         restart_browser_session,
         schema=vol.Schema({vol.Optional("config_entry_id"): cv.string}),
     )
+
+    async def get_team_absences(call):
+        candidates = [
+            e
+            for e in hass.config_entries.async_entries(DOMAIN)
+            if e.state == ConfigEntryState.LOADED
+        ]
+        entry_id = call.data.get("config_entry_id")
+        if entry_id:
+            candidates = [e for e in candidates if e.entry_id == entry_id]
+        if not candidates:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="select_account"
+            )
+        entry = candidates[0]
+        try:
+            return await entry.runtime_data.client.team_calendar(
+                {key: value for key, value in call.data.items() if key != "config_entry_id"}
+            )
+        except WorkerError as err:
+            raise HomeAssistantError(
+                f"calendar_failed: {err.code} (stage={err.stage}, detail={err.detail})"
+            ) from err
+
+    hass.services.async_register(
+        DOMAIN,
+        "get_team_absences",
+        get_team_absences,
+        schema=vol.Schema(
+            {
+                vol.Optional("config_entry_id"): cv.string,
+                vol.Optional("organizational_unit"): cv.string,
+                vol.Optional("date"): cv.string,
+            }
+        ),
+        supports_response=SupportsResponse.ONLY,
+    )

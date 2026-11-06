@@ -37,3 +37,17 @@ restart_browser_session:
       selector:
         config_entry:
           integration: hrworks
+get_team_absences:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: hrworks
+    organizational_unit:
+      example: "Cloud Native Platform CC (WCNP)"
+      selector:
+        text:
+    date:
+      example: "2026-11-06"
+      selector:
+        text:

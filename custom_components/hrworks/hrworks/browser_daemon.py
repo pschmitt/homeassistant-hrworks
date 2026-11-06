@@ -39,6 +39,7 @@ OPERATIONS = (
     "account",
     "record",
     "assist",
+    "team_calendar",
     "logout",
 )
 # Seconds a run may take, per operation .
@@ -46,6 +47,7 @@ TIMEOUTS = {
     "snapshot": 170,
     "record": 150,
     "assist": 170,
+    "team_calendar": 120,
     "login": 90,
     "day": 90,
     "account": 90,
@@ -66,14 +68,10 @@ def _read(name: str) -> str:
     return (SCRIPT_DIR / f"{name}.js").read_text(encoding="utf-8").strip()
 
 
-HELPERS = _read("helpers")
-SOURCES = {name: _read(name) for name in OPERATIONS}
-
-
 def script(operation: str) -> str:
     """One function expression: the shared helpers, then the operation called with them."""
     return (
-        f"async (ctx) => {{\n{HELPERS}\nconst operation = {SOURCES[operation]};\n"
+        f"async (ctx) => {{\n{_read('helpers')}\nconst operation = {_read(operation)};\n"
         "return await operation(ctx, H);\n}"
     )
 
@@ -293,6 +291,9 @@ class BrowserDaemonClient:
                 if options.get("keep_open") and res.page:
                     self._tab = res.page
             except (BrowserDaemonError, aiohttp.ClientError, TimeoutError) as err:
+                if isinstance(err, RunError):
+                    import logging
+                    logging.getLogger(__name__).warning("HRWORKS RUN ERROR: %s", err.run.error)
                 if isinstance(err, RunError) and "not found in the session" in (
                     err.run.error or ""
                 ):
@@ -495,6 +496,14 @@ class BrowserDaemonClient:
         res = await self._run("assist", args, write=not dry_run)
         if not isinstance(res.result, dict):
             raise WorkerError("write_uncertain" if not dry_run else "portal_changed")
+        return res.result
+
+    async def team_calendar(self, options: dict | None = None) -> dict:
+        """Fetch team/company absence calendar."""
+        self._path()
+        res = await self._run("team_calendar", options or {})
+        if not isinstance(res.result, dict):
+            raise WorkerError("portal_changed")
         return res.result
 
 
