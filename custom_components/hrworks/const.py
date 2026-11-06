@@ -5,6 +5,9 @@ from homeassistant.const import Platform
 DOMAIN = "hrworks"
 PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.CALENDAR, Platform.BUTTON]
 CONF_COMPANY = "company_id"
+CONF_BD_ENTRY_ID = "browser_daemon_entry_id"
+# Form only: whether the URL and secret below replace the selected integration.
+CONF_BD_OVERRIDE = "browser_daemon_override"
 CONF_BD_URL = "browser_daemon_url"
 CONF_BD_SECRET = "browser_daemon_secret"
 CONF_BD_PROFILE = "browser_daemon_profile"

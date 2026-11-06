@@ -3,6 +3,7 @@
 from homeassistant.components.button import ButtonEntity
 from homeassistant.const import EntityCategory
 
+from .api import integration_client
 from .entity import HrworksEntity
 
 
@@ -39,9 +40,7 @@ class HrworksRestartBrowserSessionButton(HrworksEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         try:
-            from custom_components.browser_daemon import async_get_client
-
-            client = async_get_client(self.hass)
+            client = integration_client(self.hass, self.coordinator.entry.data)
             if client:
                 sessions = await client.async_list_sessions()
                 for s in sessions:

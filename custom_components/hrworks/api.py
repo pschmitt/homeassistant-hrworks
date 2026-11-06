@@ -2,30 +2,41 @@
 
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import CONF_BD_SECRET, CONF_BD_URL
-from .hrworks.browser_daemon import BrowserDaemonClient
+from .const import CONF_BD_ENTRY_ID, CONF_BD_URL
+from .hrworks.browser_daemon import CLIENT_NAME, BrowserDaemonClient
 from .hrworks.errors import WorkerError
 
-__all__ = ["WorkerError", "create_client", "shared_browser_daemon"]
+__all__ = ["WorkerError", "create_client", "integration_client"]
 
 
-def shared_browser_daemon(hass) -> dict:
-    """The URL and cluster secret of the Browser Daemon integration, never stored here."""
+def integration_client(hass, settings: dict):
+    """The selected Browser Daemon integration's client; None for a custom connection."""
+    if settings.get(CONF_BD_URL):
+        return None
     try:
         from custom_components.browser_daemon import async_get_client
-    except ImportError as err:
-        raise WorkerError("cannot_connect") from err
-    client = async_get_client(hass)
-    url = getattr(client, "base_url", None)
-    if not url:
-        raise WorkerError("cannot_connect")
-    return {CONF_BD_URL: url, CONF_BD_SECRET: getattr(client, "cluster_secret", None)}
+    except ImportError:
+        return None
+    return async_get_client(hass, settings.get(CONF_BD_ENTRY_ID) or None)
 
 
 def create_client(hass, settings: dict, *, allow_writes: bool = False) -> BrowserDaemonClient:
-    """A client for the entry's browser-daemon; an empty URL uses the Browser Daemon integration."""
-    if not settings.get(CONF_BD_URL):
-        settings = {**settings, **shared_browser_daemon(hass)}
+    """A client for the entry's custom connection or selected Browser Daemon integration."""
+    if settings.get(CONF_BD_URL):
+        return BrowserDaemonClient(
+            settings, http=async_get_clientsession(hass), allow_writes=allow_writes
+        )
+    try:
+        from custom_components.browser_daemon import BrowserDaemonError, async_get_daemon
+    except ImportError as err:
+        raise WorkerError("cannot_connect") from err
+    try:
+        daemon = async_get_daemon(
+            hass, client=CLIENT_NAME, entry_id=settings.get(CONF_BD_ENTRY_ID) or None
+        )
+    except BrowserDaemonError as err:
+        raise WorkerError("cannot_connect") from err
+    # The cluster secret stays in the Browser Daemon integration.
     return BrowserDaemonClient(
-        settings, http=async_get_clientsession(hass), allow_writes=allow_writes
+        {**settings, CONF_BD_URL: daemon.url}, daemon=daemon, allow_writes=allow_writes
     )

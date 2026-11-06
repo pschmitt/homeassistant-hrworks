@@ -6,9 +6,10 @@ when an rbw integration is selected.
 
 ## Browser-daemon connection and placement
 
-HR WORKS uses browser-daemon's Playwright run API. Leave the URL and cluster
-secret empty to reuse the Home Assistant Browser Daemon integration, or enter
-an explicit connection. Runs must be enabled on the selected node.
+HR WORKS uses browser-daemon's Playwright run API. Select the Browser Daemon
+integration to use; it provides the connection, so no URL or cluster secret is
+stored here. Turn on the override to enter a URL and cluster secret instead,
+which does not need that integration. Runs must be enabled on the selected node.
 
 New setups default to the dedicated `ha-hrworks` profile, created by the
 integration before its first run. Existing configured names remain unchanged.

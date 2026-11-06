@@ -10,10 +10,14 @@ from browser_daemon_client import RunError, RunResult
 from homeassistant.exceptions import ConfigEntryError
 
 from custom_components.hrworks import api, async_migrate_entry, async_setup_entry, config_flow
-from custom_components.hrworks.api import WorkerError, create_client
+from custom_components.hrworks.api import WorkerError, create_client, integration_client
 from custom_components.hrworks.config_flow import HrworksConfigFlow
 from custom_components.hrworks.coordinator import HrworksCoordinator
-from custom_components.hrworks.hrworks.browser_daemon import BrowserDaemonClient, script
+from custom_components.hrworks.hrworks.browser_daemon import (
+    CLIENT_NAME,
+    BrowserDaemonClient,
+    script,
+)
 
 ACCOUNT = {
     "company_id": "example",
@@ -91,6 +95,72 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(flow_._data["browser_daemon_url"], "")
         self.assertIsNone(flow_._data["browser_daemon_secret"])
 
+    async def test_selection_clears_a_previous_override(self):
+        """Hidden fields are not submitted, so the checkbox decides."""
+        flow_ = flow(
+            {**ACCOUNT, "browser_daemon_url": "https://old", "browser_daemon_secret": "old"}
+        )
+        with patch.object(config_flow, "create_client", return_value=fake_client()):
+            await flow_.async_step_reconfigure(
+                {
+                    "browser_daemon_override": False,
+                    "browser_daemon_entry_id": "bd2",
+                    "browser_daemon_url": "",
+                    "browser_daemon_profile": "p",
+                }
+            )
+        self.assertEqual(flow_._data["browser_daemon_entry_id"], "bd2")
+        self.assertEqual(flow_._data["browser_daemon_url"], "")
+        self.assertIsNone(flow_._data["browser_daemon_secret"])
+        self.assertNotIn("browser_daemon_override", flow_._data)
+
+    async def test_override_clears_the_selection(self):
+        flow_ = flow({**ACCOUNT, "browser_daemon_entry_id": "bd2"})
+        with patch.object(config_flow, "create_client", return_value=fake_client()):
+            await flow_.async_step_reconfigure(
+                {**BD, "browser_daemon_override": True, "browser_daemon_url": "https://bd.example"}
+            )
+        self.assertEqual(flow_._data["browser_daemon_entry_id"], "")
+        self.assertEqual(flow_._data["browser_daemon_url"], "https://bd.example")
+
+    async def test_override_needs_a_url(self):
+        flow_ = flow(ACCOUNT)
+        with patch.object(config_flow, "create_client") as create:
+            result = await flow_.async_step_reconfigure(
+                {
+                    "browser_daemon_override": True,
+                    "browser_daemon_secret": "s",
+                    "browser_daemon_profile": "p",
+                }
+            )
+        self.assertEqual(result["errors"], {"base": "invalid_request"})
+        create.assert_not_called()
+
+    async def test_form_lists_enabled_integrations_with_the_override_off(self):
+        setup = HrworksConfigFlow()
+        setup.hass = MagicMock()
+        daemon = SimpleNamespace(entry_id="bd1", title="Browser Daemon (a)", disabled_by=None)
+        disabled = SimpleNamespace(entry_id="off", title="Off", disabled_by="user")
+        setup.hass.config_entries.async_entries.return_value = [daemon, disabled]
+        schema = (await setup.async_step_user())["data_schema"].schema
+        markers = {key.schema: key for key in schema}
+        self.assertEqual(
+            schema[markers["browser_daemon_entry_id"]].container, {"bd1": daemon.title}
+        )
+        self.assertIs(markers["browser_daemon_override"].default(), False)
+        override = {"field": "browser_daemon_override", "value": True}
+        self.assertEqual(markers["browser_daemon_url"].visible, override)
+        self.assertEqual(markers["browser_daemon_secret"].visible, override)
+
+    async def test_form_without_integration_only_offers_the_override(self):
+        setup = HrworksConfigFlow()
+        setup.hass = MagicMock()
+        setup.hass.config_entries.async_entries.return_value = []
+        schema = (await setup.async_step_user())["data_schema"].schema
+        markers = {key.schema: key for key in schema}
+        self.assertNotIn("browser_daemon_entry_id", markers)
+        self.assertIs(markers["browser_daemon_override"].default(), True)
+
     async def test_url_without_secret_is_invalid(self):
         flow_ = flow(ACCOUNT)
         with patch.object(config_flow, "create_client") as create:
@@ -166,32 +236,35 @@ class MigrationTests(unittest.IsolatedAsyncioTestCase):
 
 
 class CreateClientTests(unittest.TestCase):
-    def shared(self, **attributes):
+    def shared(self):
         module = ModuleType("custom_components.browser_daemon")
-        module.async_get_client = MagicMock(return_value=SimpleNamespace(**attributes))
+        module.BrowserDaemonError = type("BrowserDaemonError", (Exception,), {})
+        module.async_get_client = MagicMock()
+        module.async_get_daemon = MagicMock(return_value=SimpleNamespace(url="http://shared:3001"))
         return patch.dict(sys.modules, {"custom_components.browser_daemon": module}), module
 
     def settings(self, **extra):
         return {"browser_daemon_profile": "hrworks", **extra}
 
-    def test_empty_url_uses_the_shared_connection_without_storing_it(self):
-        patcher, module = self.shared(base_url="http://shared:3001", cluster_secret="shared-secret")
-        settings = self.settings(browser_daemon_url="", browser_daemon_secret=None)
+    def test_blank_url_uses_the_selected_integrations_daemon(self):
+        patcher, module = self.shared()
+        settings = self.settings(browser_daemon_url="", browser_daemon_entry_id="bd2")
         hass = MagicMock()
-        with patcher, patch.object(api, "async_get_clientsession", return_value="http"):
+        with patcher:
             client = create_client(hass, settings)
-        module.async_get_client.assert_called_once_with(hass)
+        module.async_get_daemon.assert_called_once_with(hass, client=CLIENT_NAME, entry_id="bd2")
+        self.assertIs(client._client(), module.async_get_daemon.return_value)
+        # The cluster secret stays in the Browser Daemon integration.
+        self.assertNotIn("browser_daemon_secret", client.settings)
         self.assertEqual(client.settings["browser_daemon_url"], "http://shared:3001")
-        self.assertEqual(client.settings["browser_daemon_secret"], "shared-secret")
         self.assertEqual(settings["browser_daemon_url"], "")
-        self.assertIsNone(settings["browser_daemon_secret"])
 
-    def test_an_explicit_url_ignores_the_shared_connection(self):
-        patcher, module = self.shared(base_url="http://shared", cluster_secret="x")
+    def test_an_override_ignores_the_integration(self):
+        patcher, module = self.shared()
         settings = self.settings(browser_daemon_url="https://own", browser_daemon_secret="own")
         with patcher, patch.object(api, "async_get_clientsession", return_value="http"):
             client = create_client(MagicMock(), settings)
-        module.async_get_client.assert_not_called()
+        module.async_get_daemon.assert_not_called()
         self.assertEqual(client.settings["browser_daemon_secret"], "own")
 
     def test_missing_integration_is_cannot_connect(self):
@@ -200,11 +273,23 @@ class CreateClientTests(unittest.TestCase):
                 create_client(MagicMock(), self.settings())
         self.assertEqual(err.exception.code, "cannot_connect")
 
-    def test_unconfigured_integration_is_cannot_connect(self):
-        patcher, _ = self.shared(base_url=None, cluster_secret=None)
+    def test_unavailable_integration_is_cannot_connect(self):
+        patcher, module = self.shared()
+        module.async_get_daemon.side_effect = module.BrowserDaemonError("gone")
         with patcher, self.assertRaises(WorkerError) as err:
             create_client(MagicMock(), self.settings())
         self.assertEqual(err.exception.code, "cannot_connect")
+
+    def test_integration_client_follows_the_selection(self):
+        patcher, module = self.shared()
+        hass = MagicMock()
+        with patcher:
+            self.assertIs(
+                integration_client(hass, {"browser_daemon_entry_id": "bd2"}),
+                module.async_get_client.return_value,
+            )
+            module.async_get_client.assert_called_once_with(hass, "bd2")
+            self.assertIsNone(integration_client(hass, {"browser_daemon_url": "https://own"}))
 
 
 class FakeDaemon:

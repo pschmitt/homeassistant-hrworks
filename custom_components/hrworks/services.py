@@ -6,7 +6,7 @@ from homeassistant.core import SupportsResponse
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
-from .api import WorkerError
+from .api import WorkerError, integration_client
 from .auth import authenticate
 from .const import CONF_WRITES, DOMAIN
 from .coordinator import create_issue
@@ -79,9 +79,7 @@ def register_services(hass) -> None:
             return
         entry = candidates[0]
         try:
-            from custom_components.browser_daemon import async_get_client
-
-            client = async_get_client(hass)
+            client = integration_client(hass, entry.data)
             if client:
                 sessions = await client.async_list_sessions()
                 for s in sessions:

@@ -4,10 +4,12 @@
     "step": {
       "user": {
         "title": "Connect browser-daemon",
-        "description": "Home Assistant runs the HR WORKS scripts through the browser-daemon run API. Leave the URL and cluster secret empty to use the connection of the Browser Daemon integration, or give the URL of any node and the cluster secret. The profile keeps the employee login; the integration signs in to it itself. Blank secret fields keep saved values. Employee login follows in the next step.",
+        "description": "Home Assistant runs the HR WORKS scripts through the browser-daemon run API. Select the Browser Daemon integration to use, or turn on the override to enter the URL of any node and the cluster secret instead. A blank secret keeps the saved one. The profile keeps the employee login; the integration signs in to it itself. Employee login follows in the next step.",
         "data": {
+          "browser_daemon_entry_id": "Browser Daemon integration",
+          "browser_daemon_override": "Override with a custom URL and cluster secret",
           "browser_daemon_url": "browser-daemon URL",
-          "browser_daemon_secret": "Cluster secret",
+          "browser_daemon_secret": "Cluster secret (blank: keep saved)",
           "browser_daemon_profile": "Browser profile (default: ha-hrworks; blank: throwaway)",
           "browser_daemon_node_group": "Browser Daemon node group (optional)",
           "name": "Device name"
@@ -15,10 +17,12 @@
       },
       "reconfigure": {
         "title": "Connect browser-daemon",
-        "description": "Home Assistant runs the HR WORKS scripts through the browser-daemon run API. Leave the URL and cluster secret empty to use the connection of the Browser Daemon integration, or give the URL of any node and the cluster secret. The profile keeps the employee login; the integration signs in to it itself. Blank secret fields keep saved values. Employee login follows in the next step.",
+        "description": "Home Assistant runs the HR WORKS scripts through the browser-daemon run API. Select the Browser Daemon integration to use, or turn on the override to enter the URL of any node and the cluster secret instead. A blank secret keeps the saved one. The profile keeps the employee login; the integration signs in to it itself. Employee login follows in the next step.",
         "data": {
+          "browser_daemon_entry_id": "Browser Daemon integration",
+          "browser_daemon_override": "Override with a custom URL and cluster secret",
           "browser_daemon_url": "browser-daemon URL",
-          "browser_daemon_secret": "Cluster secret",
+          "browser_daemon_secret": "Cluster secret (blank: keep saved)",
           "browser_daemon_profile": "Browser profile (default: ha-hrworks; blank: throwaway)",
           "browser_daemon_node_group": "Browser Daemon node group (optional)",
           "name": "Device name"

@@ -24,7 +24,9 @@ from homeassistant.helpers.selector import (
 from .api import WorkerError, create_client
 from .auth import complete_mfa, credentials, secret_settings
 from .const import (
+    CONF_BD_ENTRY_ID,
     CONF_BD_NODE_GROUP,
+    CONF_BD_OVERRIDE,
     CONF_BD_PROFILE,
     CONF_BD_SECRET,
     CONF_BD_URL,
@@ -51,16 +53,42 @@ PASSWORD = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
 RBW_DISABLED = "disabled"
 
 
-def connection_schema(defaults: dict) -> vol.Schema:
-    """The browser-daemon node and its profile. The cluster secret is never prefilled.
+def connection_schema(defaults: dict, hass) -> vol.Schema:
+    """Where browser-daemon is and which profile to use. The cluster secret is never prefilled.
 
-    Without a URL, the connection of the Browser Daemon integration is used."""
+    A Browser Daemon integration provides the connection unless the override is on."""
+    saved = defaults.get(CONF_BD_ENTRY_ID)
+    daemons = {
+        entry.entry_id: entry.title
+        for entry in hass.config_entries.async_entries("browser_daemon")
+        if not entry.disabled_by
+    }
+    if saved:
+        daemons.setdefault(saved, "Unavailable integration")
+    override = {"field": CONF_BD_OVERRIDE, "value": True}
+    selection = (
+        {
+            data_entry_flow.Optional(
+                CONF_BD_ENTRY_ID,
+                default=saved or next(iter(daemons)),
+                visible={"field": CONF_BD_OVERRIDE, "operator": "not_eq", "value": True},
+            ): vol.In(daemons)
+        }
+        if daemons
+        else {}
+    )
     return vol.Schema(
         {
-            vol.Optional(CONF_BD_URL, default=defaults.get(CONF_BD_URL) or ""): TextSelector(
-                TextSelectorConfig(type=TextSelectorType.URL)
-            ),
-            vol.Optional(CONF_BD_SECRET): PASSWORD,
+            **selection,
+            vol.Optional(
+                CONF_BD_OVERRIDE,
+                default=defaults.get(CONF_BD_OVERRIDE, bool(defaults.get(CONF_BD_URL)))
+                or not daemons,
+            ): BooleanSelector(),
+            data_entry_flow.Optional(
+                CONF_BD_URL, default=defaults.get(CONF_BD_URL) or "", visible=override
+            ): TextSelector(TextSelectorConfig(type=TextSelectorType.URL)),
+            data_entry_flow.Optional(CONF_BD_SECRET, visible=override): PASSWORD,
             vol.Optional(
                 CONF_BD_NODE_GROUP, default=defaults.get(CONF_BD_NODE_GROUP, "")
             ): TextSelector(),
@@ -158,16 +186,20 @@ class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
                 settings[CONF_BD_URL] = str(settings.get(CONF_BD_URL) or "").strip()
                 settings.setdefault(CONF_BD_PROFILE, self._data.get(CONF_BD_PROFILE, "ha-hrworks"))
                 required = ()
-                if settings[CONF_BD_URL]:
+                # Hidden fields are not submitted, so stale values are cleared here.
+                if settings.pop(CONF_BD_OVERRIDE, bool(settings[CONF_BD_URL])):
+                    settings[CONF_BD_ENTRY_ID] = ""
                     # A blank secret keeps the saved one (reconfigure).
                     settings[CONF_BD_SECRET] = settings.get(CONF_BD_SECRET) or self._data.get(
                         CONF_BD_SECRET
                     )
-                    required += (CONF_BD_SECRET,)
+                    required += (CONF_BD_URL, CONF_BD_SECRET)
                     if urlsplit(settings[CONF_BD_URL]).scheme not in {"http", "https"}:
                         raise WorkerError("invalid_request")
                 else:
                     # The Browser Daemon integration's connection: nothing to keep here.
+                    settings[CONF_BD_ENTRY_ID] = settings.get(CONF_BD_ENTRY_ID) or ""
+                    settings[CONF_BD_URL] = ""
                     settings[CONF_BD_SECRET] = None
                 if not all(str(settings.get(key) or "").strip() for key in required):
                     raise WorkerError("invalid_request")
@@ -190,7 +222,7 @@ class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
                 return await self.async_step_account()
         return self.async_show_form(
             step_id=step,
-            data_schema=connection_schema({**self._data, CONF_NAME: self._title}),
+            data_schema=connection_schema({**self._data, CONF_NAME: self._title}, self.hass),
             errors=errors,
         )
 

@@ -52,7 +52,7 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
             ({"browser_daemon_profile": "hrworks"}, "hrworks"),
             ({"browser_daemon_profile": ""}, ""),
         ):
-            markers = {key.schema: key for key in connection_schema(defaults).schema}
+            markers = {key.schema: key for key in connection_schema(defaults, MagicMock()).schema}
             self.assertEqual(markers["browser_daemon_profile"].default(), expected)
 
     def test_account_fields_depend_on_vault_selection(self):
