@@ -202,6 +202,22 @@ class BrowserDaemonClient:
             except (BrowserDaemonError, aiohttp.ClientError, TimeoutError, WorkerError):
                 pass
 
+    async def stop_profile_browser(self) -> str | None:
+        """Stop a stuck browser of the profile, on any node; returns its session ID.
+
+        Takes no lock, because the operation holding it may be what is stuck. A throwaway
+        browser has no profile to find and stops nothing."""
+        if not self.browser_profile:
+            return None
+        client = self._client()
+        found = await client.find_profile(self.browser_profile)
+        session = (found or {}).get("session_id")
+        if not session:
+            return None
+        await client.delete_session(session, node=(found or {}).get("node_name"))
+        self._tab = self._mfa_started = self._session = None
+        return session
+
     async def _close_tab(self) -> None:
         tab, self._tab, self._mfa_started = self._tab, None, None
         if tab:

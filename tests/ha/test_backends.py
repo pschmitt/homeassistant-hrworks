@@ -10,7 +10,7 @@ from browser_daemon_client import RunError, RunResult
 from homeassistant.exceptions import ConfigEntryError
 
 from custom_components.hrworks import api, async_migrate_entry, async_setup_entry, config_flow
-from custom_components.hrworks.api import WorkerError, create_client, integration_client
+from custom_components.hrworks.api import WorkerError, create_client
 from custom_components.hrworks.config_flow import HrworksConfigFlow
 from custom_components.hrworks.coordinator import HrworksCoordinator
 from custom_components.hrworks.hrworks.browser_daemon import (
@@ -279,17 +279,6 @@ class CreateClientTests(unittest.TestCase):
         with patcher, self.assertRaises(WorkerError) as err:
             create_client(MagicMock(), self.settings())
         self.assertEqual(err.exception.code, "cannot_connect")
-
-    def test_integration_client_follows_the_selection(self):
-        patcher, module = self.shared()
-        hass = MagicMock()
-        with patcher:
-            self.assertIs(
-                integration_client(hass, {"browser_daemon_entry_id": "bd2"}),
-                module.async_get_client.return_value,
-            )
-            module.async_get_client.assert_called_once_with(hass, "bd2")
-            self.assertIsNone(integration_client(hass, {"browser_daemon_url": "https://own"}))
 
 
 class FakeDaemon:

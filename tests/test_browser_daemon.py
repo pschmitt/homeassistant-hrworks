@@ -33,6 +33,37 @@ def failed(message, *, timed_out=False):
     return (RunTimeout if timed_out else RunError)(run, 422)
 
 
+class StopProfileBrowserTests(unittest.IsolatedAsyncioTestCase):
+    def client(self, profile, found):
+        daemon = AsyncMock()
+        daemon.find_profile.return_value = found
+        settings = {"browser_daemon_profile": profile}
+        return BrowserDaemonClient(settings, daemon=daemon), daemon
+
+    async def test_stops_the_profiles_session_on_the_node_it_runs_on(self):
+        client, daemon = self.client("ha-hrworks", {"session_id": "s1", "node_name": "rofl-14"})
+        client._tab = "old-tab"
+        self.assertEqual(await client.stop_profile_browser(), "s1")
+        daemon.find_profile.assert_awaited_once_with("ha-hrworks")
+        daemon.delete_session.assert_awaited_once_with("s1", node="rofl-14")
+        self.assertIsNone(client._tab)
+
+    async def test_an_idle_profile_stops_nothing(self):
+        client, daemon = self.client("ha-hrworks", {"node_name": "rofl-14"})
+        self.assertIsNone(await client.stop_profile_browser())
+        daemon.delete_session.assert_not_awaited()
+
+    async def test_a_throwaway_browser_stops_nothing(self):
+        client, daemon = self.client("", None)
+        self.assertIsNone(await client.stop_profile_browser())
+        daemon.find_profile.assert_not_awaited()
+
+    async def test_it_does_not_wait_for_a_stuck_operation(self):
+        client, daemon = self.client("p", {"session_id": "s1", "node_name": None})
+        async with client._lock:
+            self.assertEqual(await client.stop_profile_browser(), "s1")
+
+
 class FakeDaemon:
     """Answers each run from a per-operation handler; remembers what it was asked."""
 

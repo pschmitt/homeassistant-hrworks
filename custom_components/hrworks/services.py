@@ -6,7 +6,7 @@ from homeassistant.core import SupportsResponse
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
-from .api import WorkerError, integration_client
+from .api import WorkerError
 from .auth import authenticate
 from .const import CONF_WRITES, DOMAIN
 from .coordinator import create_issue
@@ -79,12 +79,7 @@ def register_services(hass) -> None:
             return
         entry = candidates[0]
         try:
-            client = integration_client(hass, entry.data)
-            if client:
-                sessions = await client.async_list_sessions()
-                for s in sessions:
-                    if s.get("profile") == "hrworks":
-                        await client.async_delete_session(s["id"])
+            await entry.runtime_data.client.stop_profile_browser()
         except Exception:
             pass
         await entry.runtime_data.async_request_refresh()

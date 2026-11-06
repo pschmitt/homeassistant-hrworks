@@ -13,10 +13,9 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .api import WorkerError, integration_client
+from .api import WorkerError
 from .auth import authenticate
 from .const import (
-    CONF_BD_PROFILE,
     CONF_FUTURE_DAYS,
     CONF_PAST_DAYS,
     CONF_PENDING,
@@ -347,23 +346,13 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
     async def _async_recover_browser_session(self) -> bool:
         """Recover from browser_unavailable by terminating hung hrworks sessions in browser_daemon."""
         try:
-            client = integration_client(self.hass, self.entry.data)
-            if not client:
-                return False
-            sessions = await client.async_list_sessions()
-            recovered = False
-            for s in sessions:
-                if (
-                    self.entry.data.get(CONF_BD_PROFILE)
-                    and s.get("profile") == self.entry.data[CONF_BD_PROFILE]
-                ):
-                    LOGGER.info(
-                        "Terminating hung hrworks session %s via browser-daemon to unblock worker",
-                        s.get("id"),
-                    )
-                    await client.async_delete_session(s["id"])
-                    recovered = True
-            return recovered
+            session = await self.client.stop_profile_browser()
+            if session:
+                LOGGER.info(
+                    "Terminated hung hrworks session %s via browser-daemon to unblock worker",
+                    session,
+                )
+            return bool(session)
         except Exception as err:
             LOGGER.debug("Could not recover hrworks browser session via browser-daemon: %s", err)
             return False

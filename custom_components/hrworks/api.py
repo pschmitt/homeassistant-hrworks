@@ -6,18 +6,7 @@ from .const import CONF_BD_ENTRY_ID, CONF_BD_URL
 from .hrworks.browser_daemon import CLIENT_NAME, BrowserDaemonClient
 from .hrworks.errors import WorkerError
 
-__all__ = ["WorkerError", "create_client", "integration_client"]
-
-
-def integration_client(hass, settings: dict):
-    """The selected Browser Daemon integration's client; None for a custom connection."""
-    if settings.get(CONF_BD_URL):
-        return None
-    try:
-        from custom_components.browser_daemon import async_get_client
-    except ImportError:
-        return None
-    return async_get_client(hass, settings.get(CONF_BD_ENTRY_ID) or None)
+__all__ = ["WorkerError", "create_client"]
 
 
 def create_client(hass, settings: dict, *, allow_writes: bool = False) -> BrowserDaemonClient:
