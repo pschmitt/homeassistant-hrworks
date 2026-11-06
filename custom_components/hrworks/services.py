@@ -14,8 +14,6 @@ from .hrworks.models import TYPES
 
 
 def register_services(hass) -> None:
-    if hass.services.has_service(DOMAIN, "record_working_time"):
-        return
 
     async def record(call):
         candidates = [
