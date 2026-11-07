@@ -8,7 +8,8 @@
         "data": {
           "name": "Device name",
           "company_id": "Company ID",
-          "username": "User ID"
+          "username": "User ID",
+          "credentials_provider": "Credentials"
         },
         "sections": {
           "browser_daemon": {
@@ -23,22 +24,30 @@
               "browser_daemon_node_group": "Node group (optional)"
             }
           },
-          "credentials": {
-            "name": "Credentials",
-            "description": "rbw supplies the password and authenticator codes; its username must match. Blank secret fields keep saved values.",
+          "rbw": {
+            "name": "rbw",
             "data": {
               "rbw_entry_id": "rbw integration",
-              "rbw_item_id": "Vault item",
-              "password": "Password",
-              "totp_uri": "TOTP URI (optional)",
-              "clear_totp": "Remove saved TOTP URI",
-              "code": "Authenticator code (optional)"
+              "rbw_item_id": "Vault item"
             },
             "data_description": {
-              "rbw_entry_id": "Leave empty to enter a static password and TOTP URI below instead. Using rbw needs the rbw integration.",
+              "rbw_entry_id": "Needs the rbw integration.",
               "rbw_item_id": "Lists what rbw allows this integration to read. To offer more, allow them in the rbw integration's options, or type an item ID and approve it under Repairs."
             }
+          },
+          "manual": {
+            "name": "Password and TOTP",
+            "description": "Saved in this integration. Blank secret fields keep saved values.",
+            "data": {
+              "password": "Password",
+              "totp_uri": "TOTP URI (optional)",
+              "code": "Authenticator code (optional)",
+              "clear_totp": "Remove saved TOTP URI"
+            }
           }
+        },
+        "data_description": {
+          "credentials_provider": "rbw supplies the password and authenticator codes; its username must match."
         }
       },
       "reconfigure": {
@@ -47,7 +56,8 @@
         "data": {
           "name": "Device name",
           "company_id": "Company ID",
-          "username": "User ID"
+          "username": "User ID",
+          "credentials_provider": "Credentials"
         },
         "sections": {
           "browser_daemon": {
@@ -62,22 +72,30 @@
               "browser_daemon_node_group": "Node group (optional)"
             }
           },
-          "credentials": {
-            "name": "Credentials",
-            "description": "rbw supplies the password and authenticator codes; its username must match. Blank secret fields keep saved values.",
+          "rbw": {
+            "name": "rbw",
             "data": {
               "rbw_entry_id": "rbw integration",
-              "rbw_item_id": "Vault item",
-              "password": "Password",
-              "totp_uri": "TOTP URI (optional)",
-              "clear_totp": "Remove saved TOTP URI",
-              "code": "Authenticator code (optional)"
+              "rbw_item_id": "Vault item"
             },
             "data_description": {
-              "rbw_entry_id": "Leave empty to enter a static password and TOTP URI below instead. Using rbw needs the rbw integration.",
+              "rbw_entry_id": "Needs the rbw integration.",
               "rbw_item_id": "Lists what rbw allows this integration to read. To offer more, allow them in the rbw integration's options, or type an item ID and approve it under Repairs."
             }
+          },
+          "manual": {
+            "name": "Password and TOTP",
+            "description": "Saved in this integration. Blank secret fields keep saved values.",
+            "data": {
+              "password": "Password",
+              "totp_uri": "TOTP URI (optional)",
+              "code": "Authenticator code (optional)",
+              "clear_totp": "Remove saved TOTP URI"
+            }
           }
+        },
+        "data_description": {
+          "credentials_provider": "rbw supplies the password and authenticator codes; its username must match."
         }
       },
       "reauth_confirm": {
@@ -86,7 +104,8 @@
         "data": {
           "name": "Device name",
           "company_id": "Company ID",
-          "username": "User ID"
+          "username": "User ID",
+          "credentials_provider": "Credentials"
         },
         "sections": {
           "browser_daemon": {
@@ -101,22 +120,30 @@
               "browser_daemon_node_group": "Node group (optional)"
             }
           },
-          "credentials": {
-            "name": "Credentials",
-            "description": "rbw supplies the password and authenticator codes; its username must match. Blank secret fields keep saved values.",
+          "rbw": {
+            "name": "rbw",
             "data": {
               "rbw_entry_id": "rbw integration",
-              "rbw_item_id": "Vault item",
-              "password": "Password",
-              "totp_uri": "TOTP URI (optional)",
-              "clear_totp": "Remove saved TOTP URI",
-              "code": "Authenticator code (optional)"
+              "rbw_item_id": "Vault item"
             },
             "data_description": {
-              "rbw_entry_id": "Leave empty to enter a static password and TOTP URI below instead. Using rbw needs the rbw integration.",
+              "rbw_entry_id": "Needs the rbw integration.",
               "rbw_item_id": "Lists what rbw allows this integration to read. To offer more, allow them in the rbw integration's options, or type an item ID and approve it under Repairs."
             }
+          },
+          "manual": {
+            "name": "Password and TOTP",
+            "description": "Saved in this integration. Blank secret fields keep saved values.",
+            "data": {
+              "password": "Password",
+              "totp_uri": "TOTP URI (optional)",
+              "code": "Authenticator code (optional)",
+              "clear_totp": "Remove saved TOTP URI"
+            }
           }
+        },
+        "data_description": {
+          "credentials_provider": "rbw supplies the password and authenticator codes; its username must match."
         }
       }
     },
@@ -138,7 +165,7 @@
       "unknown": "An unexpected error occurred.",
       "invalid_totp": "Invalid TOTP URI. Use otpauth://totp/... with a Base32 secret and six digits.",
       "login_timeout": "The HR WORKS login did not reach a known login step in time. Try again later; if it persists, check the portal in a browser.",
-      "rbw_incomplete": "Choose an rbw item, or leave the rbw integration empty.",
+      "rbw_incomplete": "Choose an rbw integration and a vault item, or choose manual credentials.",
       "rbw_unavailable": "Could not read the selected rbw account. Unlock the vault and check item and field permissions, then retry."
     },
     "abort": {
@@ -423,6 +450,12 @@
         "doctors_appointment": "Doctor's appointment",
         "business_errand": "Business errand",
         "education_and_training": "Education and training"
+      }
+    },
+    "credentials_provider": {
+      "options": {
+        "rbw": "rbw vault",
+        "manual": "Enter manually"
       }
     }
   }

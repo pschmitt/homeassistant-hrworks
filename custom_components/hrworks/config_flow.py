@@ -5,7 +5,6 @@ from __future__ import annotations
 from urllib.parse import urlsplit
 
 import probatio as vol
-from homeassistant import data_entry_flow
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.const import CONF_NAME, CONF_PASSWORD, CONF_SCAN_INTERVAL, CONF_USERNAME
 from homeassistant.core import callback
@@ -47,17 +46,23 @@ from .const import (
     DOMAIN,
 )
 from .setup_form import (
+    CREDENTIALS_PROVIDER,
+    PROVIDER_MANUAL,
+    PROVIDER_RBW,
     SECTION_BROWSER_DAEMON,
-    SECTION_CREDENTIALS,
+    SECTION_RBW,
     browser_daemon_fields,
     clear_rbw_when_empty,
+    credentials_provider_field,
     flatten_sections,
     rbw_fields,
     rbw_item_options,
+    resolve_credentials,
     section,
 )
 from .totp import InvalidTotp
 
+SECTION_MANUAL = "manual"
 PASSWORD = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
 CONNECTION_FIELDS = (
     CONF_BD_ENTRY_ID,
@@ -71,20 +76,14 @@ CONNECTION_FIELDS = (
 SECRET_FIELDS = (CONF_PASSWORD, CONF_TOTP_URI, CONF_CODE, CONF_BD_SECRET)
 
 
-def credential_fields(defaults: dict, hass, items: list | None = None) -> dict:
-    """Credentials from rbw, or a password and TOTP URI when no rbw integration is chosen."""
-    direct = {"field": CONF_RBW_ENTRY_ID, "operator": "not_exists"}
+def manual_fields(defaults: dict) -> dict:
+    """A password and TOTP URI saved in this integration."""
     return {
-        **rbw_fields(hass, defaults, items or []),
-        data_entry_flow.Optional(CONF_PASSWORD, visible=direct): PASSWORD,
-        data_entry_flow.Optional(CONF_TOTP_URI, visible=direct): PASSWORD,
-        data_entry_flow.Optional(CONF_CODE, visible=direct): PASSWORD,
+        vol.Optional(CONF_PASSWORD): PASSWORD,
+        vol.Optional(CONF_TOTP_URI): PASSWORD,
+        vol.Optional(CONF_CODE): PASSWORD,
         **(
-            {
-                data_entry_flow.Optional(
-                    "clear_totp", default=False, visible=direct
-                ): BooleanSelector()
-            }
+            {vol.Optional("clear_totp", default=False): BooleanSelector()}
             if defaults.get(CONF_TOTP_URI)
             else {}
         ),
@@ -101,7 +100,19 @@ def setup_schema(defaults: dict, hass, items: list | None = None) -> vol.Schema:
                 SECTION_BROWSER_DAEMON,
                 browser_daemon_fields(hass, defaults, profile="ha-hrworks"),
             ),
-            **section(SECTION_CREDENTIALS, credential_fields(defaults, hass, items)),
+            **credentials_provider_field(
+                hass, defaults, manual_saved=bool(defaults.get(CONF_PASSWORD))
+            ),
+            **section(
+                SECTION_RBW,
+                rbw_fields(hass, defaults, items or []),
+                visible={"field": CREDENTIALS_PROVIDER, "value": PROVIDER_RBW},
+            ),
+            **section(
+                SECTION_MANUAL,
+                manual_fields(defaults),
+                visible={"field": CREDENTIALS_PROVIDER, "value": PROVIDER_MANUAL},
+            ),
         }
     )
 
@@ -157,9 +168,13 @@ class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
         self._form_values = {
             key: value for key, value in submitted.items() if key not in SECRET_FIELDS
         }
-        if not self._mfa_pending and (errors := await self._connect(submitted)):
-            return await self._show_form(errors)
-        return await self._login(submitted)
+        resolved, error = resolve_credentials(submitted)
+        if not self._mfa_pending:
+            if error:
+                return await self._show_form({"base": error})
+            if errors := await self._connect(resolved):
+                return await self._show_form(errors)
+        return await self._login(resolved)
 
     async def _show_form(self, errors: dict) -> ConfigFlowResult:
         defaults = {**self._data, CONF_NAME: self._title, **self._form_values}

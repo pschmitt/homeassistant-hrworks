@@ -14,7 +14,7 @@ from custom_components.hrworks.api import WorkerError
 from custom_components.hrworks.auth import authenticate, complete_mfa, credentials, secret_settings
 from custom_components.hrworks.config_flow import (
     HrworksConfigFlow,
-    credential_fields,
+    manual_fields,
     setup_schema,
 )
 from custom_components.hrworks.coordinator import (
@@ -24,7 +24,12 @@ from custom_components.hrworks.coordinator import (
     HrworksCoordinator,
 )
 from custom_components.hrworks.repairs import EmployeeLoginRepair, WorkerUnavailableRepair
-from custom_components.hrworks.setup_form import browser_daemon_fields, rbw_item_options
+from custom_components.hrworks.setup_form import (
+    browser_daemon_fields,
+    rbw_fields,
+    rbw_item_options,
+    resolve_credentials,
+)
 from custom_components.hrworks.totp import InvalidTotp
 
 URI = "otpauth://totp/Example:test?secret=JBSWY3DPEHPK3PXP"
@@ -65,30 +70,49 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
             }
             self.assertEqual(markers["browser_daemon_profile"].default(), expected)
 
-    def test_account_fields_depend_on_vault_selection(self):
-        markers = {key.schema: key for key in credential_fields({}, MagicMock())}
-        self.assertEqual(
-            markers["rbw_item_id"].visible, {"field": "rbw_entry_id", "operator": "exists"}
-        )
-        direct = {"field": "rbw_entry_id", "operator": "not_exists"}
-        self.assertEqual(markers["password"].visible, direct)
-        self.assertEqual(markers["totp_uri"].visible, direct)
-
-    def test_vault_picker_only_suggests_a_saved_vault(self):
+    def test_dialog_order_matches_teams_and_the_choice_decides_the_section(self):
         hass = MagicMock()
-        hass.config_entries.async_entries.return_value = [SimpleNamespace(entry_id="vault")]
-        for defaults, expected in (
-            ({}, None),
-            ({"rbw_entry_id": ""}, None),
-            ({"rbw_entry_id": None}, None),
-            ({"rbw_entry_id": "saved-vault"}, "saved-vault"),
+        hass.config_entries.async_entries.return_value = []
+        schema = setup_schema({}, hass)
+        markers = {str(key): key for key in schema.schema}
+        self.assertEqual(
+            list(markers),
+            [
+                "name",
+                "company_id",
+                "username",
+                "browser_daemon",
+                "credentials_provider",
+                "rbw",
+                "manual",
+            ],
+        )
+        self.assertEqual(markers["rbw"].visible, {"field": "credentials_provider", "value": "rbw"})
+        self.assertEqual(
+            markers["manual"].visible, {"field": "credentials_provider", "value": "manual"}
+        )
+
+    def test_choice_starts_with_what_is_saved_or_rbw_when_it_is_there(self):
+        rbw = MagicMock()
+        rbw.config_entries.async_entries.return_value = [
+            SimpleNamespace(entry_id="vault", disabled_by=None)
+        ]
+        none = MagicMock()
+        none.config_entries.async_entries.return_value = []
+        for hass, defaults, expected in (
+            (rbw, {}, "rbw"),
+            (none, {}, "manual"),
+            (rbw, {"password": "saved"}, "manual"),
+            (none, {"rbw_entry_id": "vault"}, "rbw"),
+            (rbw, {"credentials_provider": "manual"}, "manual"),
         ):
             with self.subTest(defaults=defaults):
-                schema = probatio.Schema(credential_fields(defaults, hass))
-                markers = {key.schema: key for key in schema.schema}
-                self.assertEqual(markers["rbw_entry_id"].description, {"suggested_value": expected})
-                # Clearing the picker must not bring a saved vault back.
-                self.assertNotIn("rbw_entry_id", schema({}))
+                marker = next(
+                    key
+                    for key in setup_schema(defaults, hass).schema
+                    if str(key) == "credentials_provider"
+                )
+                self.assertEqual(marker.default(), expected)
 
     def test_pickers_are_grey_without_their_integration(self):
         hass = MagicMock()
@@ -99,41 +123,25 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
                 "browser_daemon_entry_id",
                 "browser_daemon",
             ),
-            (credential_fields({}, hass), "rbw_entry_id", "rbw"),
+            (rbw_fields(hass, {}, []), "rbw_entry_id", "rbw"),
         ):
             selector = next(value for key, value in fields.items() if key.schema == name)
             self.assertEqual(selector.config["integration"], integration)
             self.assertIs(selector.config["read_only"], True)
 
-    def test_pickers_use_the_config_entry_selector(self):
+    def test_rbw_picker_uses_the_saved_or_first_entry(self):
         hass = MagicMock()
         hass.config_entries.async_entries.return_value = [
-            SimpleNamespace(entry_id="entry", disabled_by=None)
+            SimpleNamespace(entry_id="first"),
+            SimpleNamespace(entry_id="second"),
         ]
-        for fields, name, integration in (
-            (
-                browser_daemon_fields(hass, {}, profile="p"),
-                "browser_daemon_entry_id",
-                "browser_daemon",
-            ),
-            (credential_fields({}, hass), "rbw_entry_id", "rbw"),
-        ):
-            selector = next(value for key, value in fields.items() if key.schema == name)
-            self.assertEqual(
-                selector.serialize()["selector"]["config_entry"]["integration"], integration
+        for defaults, expected in (({}, "first"), ({"rbw_entry_id": "second"}, "second")):
+            marker = next(
+                key for key in rbw_fields(hass, defaults, []) if str(key) == "rbw_entry_id"
             )
-            self.assertNotIn("read_only", selector.config)
+            self.assertEqual(marker.default(), expected)
 
-    def test_dialog_order_and_sections_match_teams(self):
-        hass = MagicMock()
-        hass.config_entries.async_entries.return_value = []
-        schema = setup_schema({}, hass)
-        self.assertEqual(
-            [str(key) for key in schema.schema],
-            ["name", "company_id", "username", "browser_daemon", "credentials"],
-        )
-
-    def test_native_visibility_serializes_and_strips_hidden_credentials(self):
+    def test_native_form_hides_the_section_of_the_other_choice(self):
         from homeassistant.data_entry_flow import (
             _strip_hidden_fields,
             add_visible_conditions_to_serialized_schema,
@@ -142,37 +150,54 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
 
         hass = MagicMock()
         hass.config_entries.async_entries.return_value = [
-            SimpleNamespace(entry_id="vault", title="Vault")
+            SimpleNamespace(entry_id="vault", title="Vault", disabled_by=None)
         ]
-        schema = probatio.Schema(credential_fields({}, hass))
+        schema = setup_schema({}, hass)
         fields = probatio.to_field_list(schema, custom_serializer=cv.custom_serializer)
         add_visible_conditions_to_serialized_schema(schema, fields)
-        password = next(field for field in fields if field["name"] == "password")
-        self.assertEqual(password["visible"], {"field": "rbw_entry_id", "operator": "not_exists"})
-        vault = next(field for field in fields if field["name"] == "rbw_entry_id")
-        self.assertEqual(vault["selector"]["config_entry"]["integration"], "rbw")
-        vault_input = {
-            "password": "hidden",
-            "rbw_entry_id": "vault",
-            "totp_uri": "hidden",
-        }
-        visible_schema, visible_input = _strip_hidden_fields(schema, vault_input)
-        validated = visible_schema(visible_input)
-        self.assertNotIn("password", validated)
-        self.assertNotIn("totp_uri", validated)
-        direct_schema, direct_input = _strip_hidden_fields(
+        by_name = {field["name"]: field for field in fields}
+        self.assertEqual(
+            by_name["rbw"]["visible"], {"field": "credentials_provider", "value": "rbw"}
+        )
+        common = {"company_id": "example", "username": "employee", "browser_daemon": {}}
+        visible_schema, values = _strip_hidden_fields(
             schema,
             {
-                "password": "direct",
-                "totp_uri": URI,
-                "code": "123456",
+                **common,
+                "credentials_provider": "rbw",
+                "rbw": {"rbw_entry_id": "vault", "rbw_item_id": "item"},
+                "manual": {"password": "hidden"},
             },
         )
-        direct = direct_schema(direct_input)
-        self.assertEqual(direct["password"], "direct")
-        self.assertEqual(direct["totp_uri"], URI)
-        self.assertEqual(direct["code"], "123456")
-        self.assertNotIn("rbw_entry_id", direct)
+        validated = visible_schema(values)
+        self.assertEqual(validated["rbw"]["rbw_item_id"], "item")
+        self.assertNotIn("manual", validated)
+        visible_schema, values = _strip_hidden_fields(
+            schema,
+            {
+                **common,
+                "credentials_provider": "manual",
+                "rbw": {"rbw_entry_id": "vault"},
+                "manual": {"password": "direct", "totp_uri": URI, "code": "123456"},
+            },
+        )
+        validated = visible_schema(values)
+        self.assertEqual(validated["manual"]["password"], "direct")
+        self.assertNotIn("rbw", validated)
+
+    def test_choice_decides_what_is_saved(self):
+        vault = {"rbw_entry_id": "vault", "rbw_item_id": "item"}
+        self.assertEqual(
+            resolve_credentials({**vault, "credentials_provider": "rbw"}), (vault, None)
+        )
+        self.assertEqual(
+            resolve_credentials({**vault, "credentials_provider": "manual"}),
+            ({"rbw_entry_id": "", "rbw_item_id": ""}, None),
+        )
+        for missing in ({}, {"rbw_entry_id": "vault"}, {"rbw_item_id": "item"}):
+            self.assertEqual(
+                resolve_credentials({**missing, "credentials_provider": "rbw"})[1], "rbw_incomplete"
+            )
 
     async def test_form_lists_items_by_name_next_to_the_rbw_picker(self):
         flow = self.flow("user", data=dict(DATA))
@@ -192,10 +217,9 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
             form = await flow.async_step_user()
         listed.assert_awaited_once_with(flow.hass, "vault")
         credentials = next(
-            value for key, value in form["data_schema"].schema.items() if str(key) == "credentials"
+            value for key, value in form["data_schema"].schema.items() if str(key) == "rbw"
         ).schema.schema
         marker = next(key for key in credentials if str(key) == "rbw_item_id")
-        self.assertEqual(marker.visible, {"field": "rbw_entry_id", "operator": "exists"})
         self.assertEqual(
             [
                 (option["value"], option["label"])
@@ -215,7 +239,7 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
             ({}, [*only, {"value": "other", "label": "Other"}], None),
         ):
             with self.subTest(defaults=defaults, items=items):
-                fields = credential_fields(defaults, hass, items)
+                fields = rbw_fields(hass, defaults, items)
                 marker = next(key for key in fields if str(key) == "rbw_item_id")
                 self.assertEqual(marker.description, {"suggested_value": expected})
 
@@ -426,7 +450,7 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("totp_uri", secret_settings(settings, {"clear_totp": True}))
         with self.assertRaises(InvalidTotp):
             secret_settings(DATA, {"totp_uri": URI + "&digits=8"})
-        for key in credential_fields(settings, MagicMock()):
+        for key in manual_fields(settings):
             if str(key) in {"password", "totp_uri"}:
                 self.assertNotEqual(key.default, URI)
                 self.assertNotEqual(key.default, DATA["password"])

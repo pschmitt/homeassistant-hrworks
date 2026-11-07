@@ -1,7 +1,8 @@
 """Parts of the setup dialog that HR WORKS and Teams share.
 
 Both repositories carry the same file, so both dialogs keep the same shape: the
-integration's own fields, then a Browser Daemon section, then a credentials section.
+integration's own fields, then a Browser Daemon section, then a choice of credentials
+which shows either the rbw section or the fields for manual credentials.
 """
 
 from __future__ import annotations
@@ -26,7 +27,11 @@ from homeassistant.helpers.selector import (
 )
 
 SECTION_BROWSER_DAEMON = "browser_daemon"
-SECTION_CREDENTIALS = "credentials"
+SECTION_RBW = "rbw"
+
+CREDENTIALS_PROVIDER = "credentials_provider"
+PROVIDER_RBW = "rbw"
+PROVIDER_MANUAL = "manual"
 
 USE_BROWSER_DAEMON = "use_browser_daemon"
 BROWSER_DAEMON_ENTRY_ID = "browser_daemon_entry_id"
@@ -40,7 +45,10 @@ RBW_ITEM_ID = "rbw_item_id"
 
 
 def section(
-    name: str, fields: dict[Any, Any], *, visible: dict[str, Any] | None = None
+    name: str,
+    fields: dict[Any, Any],
+    *,
+    visible: dict[str, Any] | list[dict[str, Any]] | None = None,
 ) -> dict[Any, Any]:
     """A titled group of fields, for inside a schema.
 
@@ -125,6 +133,40 @@ def browser_daemon_fields(
     }
 
 
+def choice(options: list[str], translation_key: str) -> SelectSelector:
+    """A short list of labelled options, all visible at once."""
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=options, translation_key=translation_key, mode=SelectSelectorMode.LIST
+        )
+    )
+
+
+def credentials_provider_field(
+    hass: Any,
+    defaults: Mapping[str, Any],
+    *,
+    manual_saved: bool,
+    visible: dict[str, Any] | None = None,
+) -> dict[Any, Any]:
+    """rbw or manual credentials, which decides the section that shows.
+
+    It stays outside any section, because a section's condition only sees such fields.
+    A new setup starts with rbw if it is there.
+    """
+    default = defaults.get(CREDENTIALS_PROVIDER)
+    if not default:
+        rbw = defaults.get(RBW_ENTRY_ID) or (
+            not manual_saved and hass.config_entries.async_entries("rbw")
+        )
+        default = PROVIDER_RBW if rbw else PROVIDER_MANUAL
+    return {
+        data_entry_flow.Optional(CREDENTIALS_PROVIDER, default=default, visible=visible): choice(
+            [PROVIDER_RBW, PROVIDER_MANUAL], CREDENTIALS_PROVIDER
+        )
+    }
+
+
 def rbw_fields(
     hass: Any, defaults: Mapping[str, Any], items: list[SelectOptionDict]
 ) -> dict[Any, Any]:
@@ -134,21 +176,29 @@ def rbw_fields(
     listed, and rbw then offers to allow it through a repair.
     """
     saved = defaults.get(RBW_ENTRY_ID) or None
-    available = bool(saved or hass.config_entries.async_entries("rbw"))
+    entries = hass.config_entries.async_entries("rbw")
+    available = bool(saved or entries)
     item = defaults.get(RBW_ITEM_ID) or (items[0]["value"] if len(items) == 1 else None)
     return {
-        # A suggested value, not a default: clearing the picker must turn rbw off.
-        vol.Optional(RBW_ENTRY_ID, description={"suggested_value": saved}): integration_picker(
-            "rbw", available=available
-        ),
-        data_entry_flow.Optional(
-            RBW_ITEM_ID,
-            description={"suggested_value": item},
-            visible={"field": RBW_ENTRY_ID, "operator": "exists"},
-        ): SelectSelector(
+        vol.Optional(
+            RBW_ENTRY_ID, **({"default": saved or entries[0].entry_id} if available else {})
+        ): integration_picker("rbw", available=available),
+        vol.Optional(RBW_ITEM_ID, description={"suggested_value": item}): SelectSelector(
             SelectSelectorConfig(options=items, custom_value=True, mode=SelectSelectorMode.DROPDOWN)
         ),
     }
+
+
+def resolve_credentials(data: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
+    """Turn the choice into what is saved, and say what is missing for it."""
+    resolved = {key: value for key, value in data.items() if key != CREDENTIALS_PROVIDER}
+    provider = data.get(CREDENTIALS_PROVIDER)
+    if provider == PROVIDER_MANUAL:
+        return {**resolved, RBW_ENTRY_ID: "", RBW_ITEM_ID: ""}, None
+    resolved = clear_rbw_when_empty(resolved)
+    if provider == PROVIDER_RBW and not (resolved[RBW_ENTRY_ID] and resolved[RBW_ITEM_ID]):
+        return resolved, "rbw_incomplete"
+    return resolved, None
 
 
 def clear_rbw_when_empty(data: dict[str, Any]) -> dict[str, Any]:

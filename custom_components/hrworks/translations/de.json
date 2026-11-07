@@ -8,7 +8,8 @@
         "data": {
           "name": "Gerätename",
           "company_id": "Firmen-ID",
-          "username": "Benutzer-ID"
+          "username": "Benutzer-ID",
+          "credentials_provider": "Anmeldedaten"
         },
         "sections": {
           "browser_daemon": {
@@ -23,22 +24,30 @@
               "browser_daemon_node_group": "Node-Gruppe (optional)"
             }
           },
-          "credentials": {
-            "name": "Anmeldedaten",
-            "description": "rbw liefert Passwort und Authenticator-Codes; der Benutzername muss übereinstimmen. Leere Geheimnisfelder behalten gespeicherte Werte.",
+          "rbw": {
+            "name": "rbw",
             "data": {
               "rbw_entry_id": "rbw-Integration",
-              "rbw_item_id": "Tresor-Eintrag",
-              "password": "Passwort",
-              "totp_uri": "TOTP-URI (optional)",
-              "clear_totp": "Gespeicherte TOTP-URI entfernen",
-              "code": "Authenticator-Code (optional)"
+              "rbw_item_id": "Tresor-Eintrag"
             },
             "data_description": {
-              "rbw_entry_id": "Leer lassen, um stattdessen unten ein festes Passwort und eine TOTP-URI einzugeben. rbw braucht die rbw-Integration.",
+              "rbw_entry_id": "Braucht die rbw-Integration.",
               "rbw_item_id": "Zeigt, was diese Integration laut rbw lesen darf. Weitere gibst du in den Optionen der rbw-Integration frei, oder du gibst eine Eintrags-ID ein und bestätigst sie unter Reparaturen."
             }
+          },
+          "manual": {
+            "name": "Passwort und TOTP",
+            "description": "Werden in dieser Integration gespeichert. Leere Geheimnisfelder behalten gespeicherte Werte.",
+            "data": {
+              "password": "Passwort",
+              "totp_uri": "TOTP-URI (optional)",
+              "code": "Authenticator-Code (optional)",
+              "clear_totp": "Gespeicherte TOTP-URI entfernen"
+            }
           }
+        },
+        "data_description": {
+          "credentials_provider": "rbw liefert Passwort und Authenticator-Codes; der Benutzername muss übereinstimmen."
         }
       },
       "reconfigure": {
@@ -47,7 +56,8 @@
         "data": {
           "name": "Gerätename",
           "company_id": "Firmen-ID",
-          "username": "Benutzer-ID"
+          "username": "Benutzer-ID",
+          "credentials_provider": "Anmeldedaten"
         },
         "sections": {
           "browser_daemon": {
@@ -62,22 +72,30 @@
               "browser_daemon_node_group": "Node-Gruppe (optional)"
             }
           },
-          "credentials": {
-            "name": "Anmeldedaten",
-            "description": "rbw liefert Passwort und Authenticator-Codes; der Benutzername muss übereinstimmen. Leere Geheimnisfelder behalten gespeicherte Werte.",
+          "rbw": {
+            "name": "rbw",
             "data": {
               "rbw_entry_id": "rbw-Integration",
-              "rbw_item_id": "Tresor-Eintrag",
-              "password": "Passwort",
-              "totp_uri": "TOTP-URI (optional)",
-              "clear_totp": "Gespeicherte TOTP-URI entfernen",
-              "code": "Authenticator-Code (optional)"
+              "rbw_item_id": "Tresor-Eintrag"
             },
             "data_description": {
-              "rbw_entry_id": "Leer lassen, um stattdessen unten ein festes Passwort und eine TOTP-URI einzugeben. rbw braucht die rbw-Integration.",
+              "rbw_entry_id": "Braucht die rbw-Integration.",
               "rbw_item_id": "Zeigt, was diese Integration laut rbw lesen darf. Weitere gibst du in den Optionen der rbw-Integration frei, oder du gibst eine Eintrags-ID ein und bestätigst sie unter Reparaturen."
             }
+          },
+          "manual": {
+            "name": "Passwort und TOTP",
+            "description": "Werden in dieser Integration gespeichert. Leere Geheimnisfelder behalten gespeicherte Werte.",
+            "data": {
+              "password": "Passwort",
+              "totp_uri": "TOTP-URI (optional)",
+              "code": "Authenticator-Code (optional)",
+              "clear_totp": "Gespeicherte TOTP-URI entfernen"
+            }
           }
+        },
+        "data_description": {
+          "credentials_provider": "rbw liefert Passwort und Authenticator-Codes; der Benutzername muss übereinstimmen."
         }
       },
       "reauth_confirm": {
@@ -86,7 +104,8 @@
         "data": {
           "name": "Gerätename",
           "company_id": "Firmen-ID",
-          "username": "Benutzer-ID"
+          "username": "Benutzer-ID",
+          "credentials_provider": "Anmeldedaten"
         },
         "sections": {
           "browser_daemon": {
@@ -101,22 +120,30 @@
               "browser_daemon_node_group": "Node-Gruppe (optional)"
             }
           },
-          "credentials": {
-            "name": "Anmeldedaten",
-            "description": "rbw liefert Passwort und Authenticator-Codes; der Benutzername muss übereinstimmen. Leere Geheimnisfelder behalten gespeicherte Werte.",
+          "rbw": {
+            "name": "rbw",
             "data": {
               "rbw_entry_id": "rbw-Integration",
-              "rbw_item_id": "Tresor-Eintrag",
-              "password": "Passwort",
-              "totp_uri": "TOTP-URI (optional)",
-              "clear_totp": "Gespeicherte TOTP-URI entfernen",
-              "code": "Authenticator-Code (optional)"
+              "rbw_item_id": "Tresor-Eintrag"
             },
             "data_description": {
-              "rbw_entry_id": "Leer lassen, um stattdessen unten ein festes Passwort und eine TOTP-URI einzugeben. rbw braucht die rbw-Integration.",
+              "rbw_entry_id": "Braucht die rbw-Integration.",
               "rbw_item_id": "Zeigt, was diese Integration laut rbw lesen darf. Weitere gibst du in den Optionen der rbw-Integration frei, oder du gibst eine Eintrags-ID ein und bestätigst sie unter Reparaturen."
             }
+          },
+          "manual": {
+            "name": "Passwort und TOTP",
+            "description": "Werden in dieser Integration gespeichert. Leere Geheimnisfelder behalten gespeicherte Werte.",
+            "data": {
+              "password": "Passwort",
+              "totp_uri": "TOTP-URI (optional)",
+              "code": "Authenticator-Code (optional)",
+              "clear_totp": "Gespeicherte TOTP-URI entfernen"
+            }
           }
+        },
+        "data_description": {
+          "credentials_provider": "rbw liefert Passwort und Authenticator-Codes; der Benutzername muss übereinstimmen."
         }
       }
     },
@@ -138,7 +165,7 @@
       "unknown": "Ein unerwarteter Fehler ist aufgetreten.",
       "invalid_totp": "Ungültige TOTP-URI. Verwende otpauth://totp/... mit einem Base32-Geheimnis und sechs Stellen.",
       "login_timeout": "Die HR-WORKS-Anmeldung hat keinen bekannten Anmeldeschritt rechtzeitig erreicht. Versuche es später erneut; prüfe das Portal im Browser, falls es weiter auftritt.",
-      "rbw_incomplete": "Bitte einen rbw-Eintrag auswählen oder die rbw-Integration leer lassen.",
+      "rbw_incomplete": "Wähle eine rbw-Integration und einen Tresor-Eintrag oder Anmeldedaten von Hand.",
       "rbw_unavailable": "Das gewählte rbw-Konto konnte nicht gelesen werden. Entsperre den Tresor und prüfe die Berechtigungen für Eintrag und Felder."
     },
     "abort": {
@@ -414,6 +441,12 @@
         "doctors_appointment": "Arztbesuch",
         "business_errand": "Dienstgang",
         "education_and_training": "Aus- und Weiterbildung"
+      }
+    },
+    "credentials_provider": {
+      "options": {
+        "rbw": "rbw-Tresor",
+        "manual": "Von Hand eingeben"
       }
     }
   }
