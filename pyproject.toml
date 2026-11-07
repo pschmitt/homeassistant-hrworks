@@ -7,7 +7,7 @@ name = "hrworks-employee"
 version = "9.2.0"
 description = "HR WORKS employee library and Rich CLI on browser-daemon"
 requires-python = ">=3.12"
-dependencies = ["browser-daemon-client==0.13.0", "rich>=13.9", "typer>=0.16"]
+dependencies = ["browser-daemon-client==0.14.0", "rich>=13.9", "typer>=0.16"]
 license = "MIT"
 
 [project.scripts]
