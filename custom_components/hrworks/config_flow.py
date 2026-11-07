@@ -13,6 +13,8 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.selector import (
     BooleanSelector,
+    ConfigEntrySelector,
+    ConfigEntrySelectorConfig,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
@@ -50,7 +52,6 @@ from .totp import InvalidTotp
 
 PASSWORD = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
 # Empty radio values cannot be selected reliably by the HA frontend.
-RBW_DISABLED = "disabled"
 
 
 def connection_schema(defaults: dict, hass) -> vol.Schema:
@@ -58,21 +59,21 @@ def connection_schema(defaults: dict, hass) -> vol.Schema:
 
     A Browser Daemon integration provides the connection unless the override is on."""
     saved = defaults.get(CONF_BD_ENTRY_ID)
-    daemons = {
-        entry.entry_id: entry.title
+    daemons = [
+        entry.entry_id
         for entry in hass.config_entries.async_entries("browser_daemon")
         if not entry.disabled_by
-    }
+    ]
     if saved:
-        daemons.setdefault(saved, "Unavailable integration")
+        daemons.insert(0, saved)
     override = {"field": CONF_BD_OVERRIDE, "value": True}
     selection = (
         {
             data_entry_flow.Optional(
                 CONF_BD_ENTRY_ID,
-                default=saved or next(iter(daemons)),
+                default=daemons[0],
                 visible={"field": CONF_BD_OVERRIDE, "operator": "not_eq", "value": True},
-            ): vol.In(daemons)
+            ): integration_picker("browser_daemon")
         }
         if daemons
         else {}
@@ -100,28 +101,35 @@ def connection_schema(defaults: dict, hass) -> vol.Schema:
     )
 
 
+def integration_picker(domain: str) -> ConfigEntrySelector:
+    """Pick one of an integration's entries, shown with its name and icon."""
+    return ConfigEntrySelector(ConfigEntrySelectorConfig(integration=domain))
+
+
 def account_schema(defaults: dict, *, existing: bool = False, hass=None) -> vol.Schema:
-    direct = {"field": CONF_RBW_ENTRY_ID, "value": RBW_DISABLED}
+    direct = {"field": CONF_RBW_ENTRY_ID, "operator": "not_exists"}
     password = data_entry_flow.Optional(CONF_PASSWORD, visible=direct)
-    entries = {RBW_DISABLED: "Disabled"}
-    if hass is not None:
-        entries.update(
-            {entry.entry_id: entry.title for entry in hass.config_entries.async_entries("rbw")}
-        )
-    if saved_entry := defaults.get(CONF_RBW_ENTRY_ID):
-        entries.setdefault(saved_entry, "Unavailable integration")
+    saved_vault = defaults.get(CONF_RBW_ENTRY_ID) or None
+    # A suggested value, not a default: clearing the picker must disable rbw.
+    vault = (
+        {
+            vol.Optional(
+                CONF_RBW_ENTRY_ID, description={"suggested_value": saved_vault}
+            ): integration_picker("rbw")
+        }
+        if saved_vault or (hass is not None and hass.config_entries.async_entries("rbw"))
+        else {}
+    )
     return vol.Schema(
         {
             vol.Required(CONF_COMPANY, default=defaults.get(CONF_COMPANY, "")): TextSelector(),
             vol.Required(CONF_USERNAME, default=defaults.get(CONF_USERNAME, "")): TextSelector(),
             password: PASSWORD,
-            vol.Optional(
-                CONF_RBW_ENTRY_ID, default=defaults.get(CONF_RBW_ENTRY_ID) or RBW_DISABLED
-            ): vol.In(entries),
+            **vault,
             data_entry_flow.Optional(
                 CONF_RBW_ITEM_ID,
                 default=defaults.get(CONF_RBW_ITEM_ID, ""),
-                visible={"field": CONF_RBW_ENTRY_ID, "operator": "not_eq", "value": RBW_DISABLED},
+                visible={"field": CONF_RBW_ENTRY_ID, "operator": "exists"},
             ): TextSelector(),
             data_entry_flow.Optional(CONF_TOTP_URI, visible=direct): PASSWORD,
             data_entry_flow.Optional(CONF_CODE, visible=direct): PASSWORD,
@@ -229,7 +237,7 @@ class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_account(self, user_input: dict | None = None) -> ConfigFlowResult:
         errors = {}
         if user_input is not None:
-            if user_input.get(CONF_RBW_ENTRY_ID) in ("", RBW_DISABLED):
+            if not user_input.get(CONF_RBW_ENTRY_ID):
                 user_input = {**user_input, CONF_RBW_ENTRY_ID: "", CONF_RBW_ITEM_ID: ""}
             if self._mfa_pending:
                 try:

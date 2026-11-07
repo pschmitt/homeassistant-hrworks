@@ -136,7 +136,7 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["errors"], {"base": "invalid_request"})
         create.assert_not_called()
 
-    async def test_form_lists_enabled_integrations_with_the_override_off(self):
+    async def test_form_defaults_to_an_enabled_integration_with_the_override_off(self):
         setup = HrworksConfigFlow()
         setup.hass = MagicMock()
         daemon = SimpleNamespace(entry_id="bd1", title="Browser Daemon (a)", disabled_by=None)
@@ -144,9 +144,9 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
         setup.hass.config_entries.async_entries.return_value = [daemon, disabled]
         schema = (await setup.async_step_user())["data_schema"].schema
         markers = {key.schema: key for key in schema}
-        self.assertEqual(
-            schema[markers["browser_daemon_entry_id"]].container, {"bd1": daemon.title}
-        )
+        picker = schema[markers["browser_daemon_entry_id"]]
+        self.assertEqual(picker.config["integration"], "browser_daemon")
+        self.assertEqual(markers["browser_daemon_entry_id"].default(), "bd1")
         self.assertIs(markers["browser_daemon_override"].default(), False)
         override = {"field": "browser_daemon_override", "value": True}
         self.assertEqual(markers["browser_daemon_url"].visible, override)
