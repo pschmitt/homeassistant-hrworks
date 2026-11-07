@@ -21,7 +21,7 @@
               "browser_daemon_url": "browser-daemon URL",
               "browser_daemon_secret": "Cluster secret",
               "browser_daemon_profile": "Browser profile (blank: throwaway)",
-              "browser_daemon_node_group": "Node group (optional)"
+              "browser_daemon_node_group": "Node label (optional)"
             }
           },
           "rbw": {
@@ -69,7 +69,7 @@
               "browser_daemon_url": "browser-daemon URL",
               "browser_daemon_secret": "Cluster secret",
               "browser_daemon_profile": "Browser profile (blank: throwaway)",
-              "browser_daemon_node_group": "Node group (optional)"
+              "browser_daemon_node_group": "Node label (optional)"
             }
           },
           "rbw": {
@@ -117,7 +117,7 @@
               "browser_daemon_url": "browser-daemon URL",
               "browser_daemon_secret": "Cluster secret",
               "browser_daemon_profile": "Browser profile (blank: throwaway)",
-              "browser_daemon_node_group": "Node group (optional)"
+              "browser_daemon_node_group": "Node label (optional)"
             }
           },
           "rbw": {

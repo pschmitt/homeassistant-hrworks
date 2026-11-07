@@ -32,6 +32,7 @@ CLIENT_NAME = "Home Assistant · HR WORKS"
 _LOGGER = logging.getLogger(__name__)
 # The integration's brand logo (absent when the library runs on its own).
 PROFILE_LABEL = "ha"
+PROFILE_LABEL_ICON = {"kind": "mdi", "name": "home-assistant"}
 PROFILE_ICON = Path(__file__).resolve().parents[1] / "brand" / "icon.png"
 MFA_WINDOW = timedelta(minutes=10)
 SCRIPT_DIR = Path(__file__).parent / "scripts"
@@ -354,8 +355,18 @@ class BrowserDaemonClient:
                     node=self._node,
                     json={"labels": [PROFILE_LABEL]},
                 )
+                await self._define_label()
         except (BrowserDaemonError, OSError):
             _LOGGER.debug("Could not brand the browser-daemon profile", exc_info=True)
+
+    async def _define_label(self) -> None:
+        """Give the `ha` label the Home Assistant icon, unless it was ever defined."""
+        client = self._client()
+        registry = await client._json("GET", "/api/labels")
+        if PROFILE_LABEL not in (registry or {}).get("defs", {}):
+            await client._json(
+                "PUT", f"/api/labels/{PROFILE_LABEL}", json={"icon": PROFILE_LABEL_ICON}
+            )
 
     def _path(self) -> str:
         if not self.profile:

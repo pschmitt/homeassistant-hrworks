@@ -16,7 +16,7 @@
 - **Absences and calendar:** Track vacation, sickness and upcoming leave with approval status and half-day annotations. See [Integration](docs/integration.md).
 - **Working-time actions:** Preview an interval before submitting it; writes require an explicit option. See [Integration](docs/integration.md#enter-working-times).
 - **Employee profiles:** Keep separate Home Assistant entries, browser profiles and settings for each employee.
-- **Authentication:** Use direct credentials or optional rbw vault access, with persistent or throwaway browsers and optional node groups. See [Authentication](docs/authentication.md).
+- **Authentication:** Use direct credentials or optional rbw vault access, with persistent or throwaway browsers and optional node labels. See [Authentication](docs/authentication.md).
 - **Command-line access:** Read balances and calendar events or preview time entries with `hrworks`. See [CLI](docs/cli.md).
 
 ## Install

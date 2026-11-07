@@ -32,7 +32,7 @@ Runs for a profile go to the node that has it.
 
 - **Connection:** reuse the Home Assistant Browser Daemon integration, or enter
   a node URL and cluster secret. Runs must be enabled on the selected node
-  (`--run-node`). An optional node group restricts browser placement. The cluster
+  (`--run-node`). An optional node label restricts browser placement. The cluster
   secret can start runs, so treat it like the employee password.
 - **Profile:** the integration creates `ha-hrworks` on first use. Existing profile
   names are preserved; clear the field for a throwaway browser. Use a dedicated

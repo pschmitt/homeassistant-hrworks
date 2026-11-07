@@ -16,10 +16,10 @@ integration before its first run. Existing configured names remain unchanged.
 Clear the profile field for a throwaway browser: one session is retained across
 login and MFA, then stopped after the refresh; cookies are not retained.
 
-The optional **Browser Daemon node group** restricts placement to nodes in that
-group. An idle existing profile can move there without overwriting another copy. An active profile outside the group, duplicate copies,
-incomplete inventory, or unavailable group capacity stops the operation;
-there is no fallback outside the group. Group placement requires a daemon
+The optional **Browser Daemon node label** restricts placement to nodes with that
+label. An idle existing profile can move there without overwriting another copy. An active profile outside the label, duplicate copies,
+incomplete inventory, or unavailable capacity for the label stops the operation;
+there is no fallback outside the label. Label placement requires a daemon
 serving `POST /api/mesh/placement`. Leave the field empty for normal profile
 routing.
 
@@ -59,7 +59,7 @@ TOTP authentication, not Teams' Microsoft passkey flow.
 
 ## Reconfigure and repair
 
-Use native **Reconfigure** to change the connection, profile, node group or
+Use native **Reconfigure** to change the connection, profile, node label or
 credential source. Switching from rbw back to direct credentials requires a
 password because no vault password was retained. Reauthentication cannot
 silently switch employees; add another integration entry for another account.
