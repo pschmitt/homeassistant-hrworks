@@ -9,20 +9,13 @@ from homeassistant import data_entry_flow
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.const import CONF_NAME, CONF_PASSWORD, CONF_SCAN_INTERVAL, CONF_USERNAME
 from homeassistant.core import callback
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.selector import (
     BooleanSelector,
-    ConfigEntrySelector,
-    ConfigEntrySelectorConfig,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
-    SelectOptionDict,
-    SelectSelector,
-    SelectSelectorConfig,
-    SelectSelectorMode,
     TextSelector,
     TextSelectorConfig,
     TextSelectorType,
@@ -53,135 +46,64 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
 )
+from .setup_form import (
+    SECTION_BROWSER_DAEMON,
+    SECTION_CREDENTIALS,
+    browser_daemon_fields,
+    clear_rbw_when_empty,
+    flatten_sections,
+    needs_rbw_item,
+    rbw_field,
+    rbw_item_options,
+    rbw_item_schema,
+    saved_rbw_item,
+    section,
+)
 from .totp import InvalidTotp
 
 PASSWORD = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
-# Empty radio values cannot be selected reliably by the HA frontend.
+CONNECTION_FIELDS = (
+    CONF_BD_ENTRY_ID,
+    CONF_BD_OVERRIDE,
+    CONF_BD_URL,
+    CONF_BD_SECRET,
+    CONF_BD_PROFILE,
+    CONF_BD_NODE_GROUP,
+)
+# Never shown again when a form comes back with an error.
+SECRET_FIELDS = (CONF_PASSWORD, CONF_TOTP_URI, CONF_CODE, CONF_BD_SECRET)
 
 
-def connection_schema(defaults: dict, hass) -> vol.Schema:
-    """Where browser-daemon is and which profile to use. The cluster secret is never prefilled.
-
-    A Browser Daemon integration provides the connection unless the override is on."""
-    saved = defaults.get(CONF_BD_ENTRY_ID)
-    daemons = [
-        entry.entry_id
-        for entry in hass.config_entries.async_entries("browser_daemon")
-        if not entry.disabled_by
-    ]
-    if saved:
-        daemons.insert(0, saved)
-    override = {"field": CONF_BD_OVERRIDE, "value": True}
-    selection = (
-        {
-            data_entry_flow.Optional(
-                CONF_BD_ENTRY_ID,
-                default=daemons[0],
-                visible={"field": CONF_BD_OVERRIDE, "operator": "not_eq", "value": True},
-            ): integration_picker("browser_daemon")
-        }
-        if daemons
-        else {}
-    )
-    return vol.Schema(
-        {
-            **selection,
-            vol.Optional(
-                CONF_BD_OVERRIDE,
-                default=defaults.get(CONF_BD_OVERRIDE, bool(defaults.get(CONF_BD_URL)))
-                or not daemons,
-            ): BooleanSelector(),
-            data_entry_flow.Optional(
-                CONF_BD_URL, default=defaults.get(CONF_BD_URL) or "", visible=override
-            ): TextSelector(TextSelectorConfig(type=TextSelectorType.URL)),
-            data_entry_flow.Optional(CONF_BD_SECRET, visible=override): PASSWORD,
-            vol.Optional(
-                CONF_BD_NODE_GROUP, default=defaults.get(CONF_BD_NODE_GROUP, "")
-            ): TextSelector(),
-            vol.Optional(
-                CONF_BD_PROFILE, default=defaults.get(CONF_BD_PROFILE, "ha-hrworks")
-            ): TextSelector(),
-            vol.Optional(CONF_NAME, default=defaults.get(CONF_NAME, "HR WORKS")): TextSelector(),
-        }
-    )
-
-
-def integration_picker(domain: str) -> ConfigEntrySelector:
-    """Pick one of an integration's entries, shown with its name and icon."""
-    return ConfigEntrySelector(ConfigEntrySelectorConfig(integration=domain))
-
-
-async def rbw_item_options(hass: Any, entry_id: str, saved: str | None) -> list[SelectOptionDict]:
-    """The items rbw lets this integration read, by name, and the saved item.
-
-    rbw lists nothing for a new integration, and the form then takes a typed ID,
-    which rbw offers to allow through a repair.
-    """
-    try:
-        from custom_components.rbw import async_list_items
-
-        items = await async_list_items(hass, entry_id)
-    except (ImportError, HomeAssistantError):
-        items = []
-    # The name is missing while the vault is locked.
-    names = {item["id"]: item.get("name") or item["id"] for item in items}
-    if saved:
-        names.setdefault(saved, saved)
-    return [
-        SelectOptionDict(value=item_id, label=name)
-        for item_id, name in sorted(names.items(), key=lambda pair: pair[1].casefold())
-    ]
-
-
-def rbw_item_schema(options: list[SelectOptionDict], saved: str | None) -> vol.Schema:
-    """Pick an item by name, or type an ID that is not listed."""
-    default = saved or (options[0]["value"] if len(options) == 1 else None)
-    return vol.Schema(
-        {
-            (
-                vol.Required(CONF_RBW_ITEM_ID, default=default)
-                if default
-                else vol.Required(CONF_RBW_ITEM_ID)
-            ): SelectSelector(
-                SelectSelectorConfig(
-                    options=options, custom_value=True, mode=SelectSelectorMode.DROPDOWN
-                )
-            )
-        }
-    )
-
-
-def account_schema(defaults: dict, *, existing: bool = False, hass=None) -> vol.Schema:
+def credential_fields(defaults: dict, hass) -> dict:
+    """Credentials from rbw, or a password and TOTP URI when no rbw integration is chosen."""
     direct = {"field": CONF_RBW_ENTRY_ID, "operator": "not_exists"}
-    password = data_entry_flow.Optional(CONF_PASSWORD, visible=direct)
-    saved_vault = defaults.get(CONF_RBW_ENTRY_ID) or None
-    # A suggested value, not a default: clearing the picker must disable rbw.
-    vault = (
-        {
-            vol.Optional(
-                CONF_RBW_ENTRY_ID, description={"suggested_value": saved_vault}
-            ): integration_picker("rbw")
-        }
-        if saved_vault or (hass is not None and hass.config_entries.async_entries("rbw"))
-        else {}
-    )
+    return {
+        **rbw_field(hass, defaults),
+        data_entry_flow.Optional(CONF_PASSWORD, visible=direct): PASSWORD,
+        data_entry_flow.Optional(CONF_TOTP_URI, visible=direct): PASSWORD,
+        data_entry_flow.Optional(CONF_CODE, visible=direct): PASSWORD,
+        **(
+            {
+                data_entry_flow.Optional(
+                    "clear_totp", default=False, visible=direct
+                ): BooleanSelector()
+            }
+            if defaults.get(CONF_TOTP_URI)
+            else {}
+        ),
+    }
+
+
+def setup_schema(defaults: dict, hass) -> vol.Schema:
     return vol.Schema(
         {
+            vol.Optional(CONF_NAME, default=defaults.get(CONF_NAME, "HR WORKS")): TextSelector(),
             vol.Required(CONF_COMPANY, default=defaults.get(CONF_COMPANY, "")): TextSelector(),
             vol.Required(CONF_USERNAME, default=defaults.get(CONF_USERNAME, "")): TextSelector(),
-            password: PASSWORD,
-            **vault,
-            data_entry_flow.Optional(CONF_TOTP_URI, visible=direct): PASSWORD,
-            data_entry_flow.Optional(CONF_CODE, visible=direct): PASSWORD,
-            **(
-                {
-                    data_entry_flow.Optional(
-                        "clear_totp", default=False, visible=direct
-                    ): BooleanSelector()
-                }
-                if defaults.get(CONF_TOTP_URI)
-                else {}
+            vol.Required(SECTION_BROWSER_DAEMON): section(
+                browser_daemon_fields(hass, defaults, profile="ha-hrworks")
             ),
+            vol.Required(SECTION_CREDENTIALS): section(credential_fields(defaults, hass)),
         }
     )
 
@@ -191,7 +113,7 @@ def mfa_schema() -> vol.Schema:
 
 
 class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Connect browser-daemon, authenticate the employee, then optionally complete MFA."""
+    """One form: the employee, Browser Daemon and credentials. Then the rbw item, if any."""
 
     VERSION = 2
     MINOR_VERSION = 1
@@ -203,6 +125,8 @@ class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
         self._entry: ConfigEntry | None = None
         self._mfa_pending = False
         self._account_input: dict = {}
+        self._form_values: dict = {}
+        self._step = "user"
 
     @staticmethod
     @callback
@@ -210,186 +134,191 @@ class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
         return HrworksOptionsFlow()
 
     async def async_step_user(self, user_input: dict | None = None) -> ConfigFlowResult:
-        return await self._connection_step("user", user_input)
+        return await self._setup_step("user", user_input)
 
     async def async_step_reconfigure(self, user_input: dict | None = None) -> ConfigFlowResult:
         self._entry = self._get_reconfigure_entry()
         if not self._data:
             self._data = dict(self._entry.data)
             self._title = self._entry.title
-        return await self._connection_step("reconfigure", user_input)
+        return await self._setup_step("reconfigure", user_input)
 
     async def async_step_reauth(self, entry_data: dict) -> ConfigFlowResult:
         self._entry = self._get_reauth_entry()
         self._data = dict(self._entry.data)
         self._title = self._entry.title
-        self._client = create_client(self.hass, self._data)
-        return await self.async_step_account()
+        return await self.async_step_reauth_confirm()
 
-    async def _connection_step(self, step: str, user_input: dict | None) -> ConfigFlowResult:
-        errors = {}
-        if user_input is not None:
-            client = None
-            try:
-                settings = {key: value for key, value in user_input.items() if key != CONF_NAME}
-                settings[CONF_BD_URL] = str(settings.get(CONF_BD_URL) or "").strip()
-                settings.setdefault(CONF_BD_PROFILE, self._data.get(CONF_BD_PROFILE, "ha-hrworks"))
-                required = ()
-                # Hidden fields are not submitted, so stale values are cleared here.
-                if settings.pop(CONF_BD_OVERRIDE, bool(settings[CONF_BD_URL])):
-                    settings[CONF_BD_ENTRY_ID] = ""
-                    # A blank secret keeps the saved one (reconfigure).
-                    settings[CONF_BD_SECRET] = settings.get(CONF_BD_SECRET) or self._data.get(
-                        CONF_BD_SECRET
-                    )
-                    required += (CONF_BD_URL, CONF_BD_SECRET)
-                    if urlsplit(settings[CONF_BD_URL]).scheme not in {"http", "https"}:
-                        raise WorkerError("invalid_request")
-                else:
-                    # The Browser Daemon integration's connection: nothing to keep here.
-                    settings[CONF_BD_ENTRY_ID] = settings.get(CONF_BD_ENTRY_ID) or ""
-                    settings[CONF_BD_URL] = ""
-                    settings[CONF_BD_SECRET] = None
-                if not all(str(settings.get(key) or "").strip() for key in required):
-                    raise WorkerError("invalid_request")
-                client = create_client(self.hass, settings)
-                await client.health()
-            except ValueError:
-                if client:
-                    await client.close()
-                errors["base"] = "invalid_request"
-            except WorkerError as err:
-                if client:
-                    await client.close()
-                errors["base"] = err.code
-            else:
-                if self._client:
-                    await self._client.close()
-                self._client = client
-                self._data.update(settings)
-                self._title = user_input.get(CONF_NAME) or self._title
-                return await self.async_step_account()
+    async def async_step_reauth_confirm(self, user_input: dict | None = None) -> ConfigFlowResult:
+        return await self._setup_step("reauth_confirm", user_input)
+
+    async def _setup_step(self, step: str, user_input: dict | None) -> ConfigFlowResult:
+        self._step = step
+        if user_input is None:
+            return self._show_form({})
+        submitted = flatten_sections(user_input)
+        self._form_values = {
+            key: value for key, value in submitted.items() if key not in SECRET_FIELDS
+        }
+        if not self._mfa_pending:
+            if needs_rbw_item(submitted):
+                self._account_input = submitted
+                return await self.async_step_rbw_item()
+            if errors := await self._connect(submitted):
+                return self._show_form(errors)
+        return await self._login(submitted)
+
+    def _show_form(self, errors: dict) -> ConfigFlowResult:
         return self.async_show_form(
-            step_id=step,
-            data_schema=connection_schema({**self._data, CONF_NAME: self._title}, self.hass),
+            step_id=self._step,
+            data_schema=setup_schema(
+                {**self._data, CONF_NAME: self._title, **self._form_values}, self.hass
+            ),
             errors=errors,
         )
 
-    async def async_step_account(self, user_input: dict | None = None) -> ConfigFlowResult:
+    async def _connect(self, submitted: dict) -> dict:
+        """Reach browser-daemon. Returns the form errors."""
+        client = None
+        try:
+            settings = {key: submitted[key] for key in CONNECTION_FIELDS if key in submitted}
+            settings[CONF_BD_URL] = str(settings.get(CONF_BD_URL) or "").strip()
+            settings.setdefault(CONF_BD_PROFILE, self._data.get(CONF_BD_PROFILE, "ha-hrworks"))
+            required = ()
+            # Hidden fields are not submitted, so stale values are cleared here.
+            if settings.pop(CONF_BD_OVERRIDE, bool(settings[CONF_BD_URL])):
+                settings[CONF_BD_ENTRY_ID] = ""
+                # A blank secret keeps the saved one (reconfigure).
+                settings[CONF_BD_SECRET] = settings.get(CONF_BD_SECRET) or self._data.get(
+                    CONF_BD_SECRET
+                )
+                required += (CONF_BD_URL, CONF_BD_SECRET)
+                if urlsplit(settings[CONF_BD_URL]).scheme not in {"http", "https"}:
+                    raise WorkerError("invalid_request")
+            else:
+                # The Browser Daemon integration's connection: nothing to keep here.
+                settings[CONF_BD_ENTRY_ID] = settings.get(CONF_BD_ENTRY_ID) or ""
+                settings[CONF_BD_URL] = ""
+                settings[CONF_BD_SECRET] = None
+            if not all(str(settings.get(key) or "").strip() for key in required):
+                raise WorkerError("invalid_request")
+            client = create_client(self.hass, settings)
+            await client.health()
+        except ValueError:
+            if client:
+                await client.close()
+            return {"base": "invalid_request"}
+        except WorkerError as err:
+            if client:
+                await client.close()
+            return {"base": err.code}
+        if self._client:
+            await self._client.close()
+        self._client = client
+        self._data.update(settings)
+        self._title = submitted.get(CONF_NAME) or self._title
+        return {}
+
+    async def _login(self, user_input: dict) -> ConfigFlowResult:
         errors = {}
-        if user_input is not None:
-            if not user_input.get(CONF_RBW_ENTRY_ID):
-                user_input = {**user_input, CONF_RBW_ENTRY_ID: "", CONF_RBW_ITEM_ID: ""}
-            elif CONF_RBW_ITEM_ID not in user_input and not self._mfa_pending:
-                self._account_input = user_input
-                return await self.async_step_rbw_item()
-            if self._mfa_pending:
+        user_input = clear_rbw_when_empty(user_input)
+        if self._mfa_pending:
+            try:
+                self._data = await complete_mfa(
+                    self._client, self._data, user_input, hass=self.hass
+                )
+            except InvalidTotp:
+                errors["base"] = "invalid_totp"
+            except WorkerError as err:
+                errors["base"] = err.code
+            else:
+                self._mfa_pending = False
+                return await self._finish()
+        else:
+            company = user_input[CONF_COMPANY].strip()
+            username = user_input[CONF_USERNAME].strip()
+            selected = {
+                **self._data,
+                **{
+                    key: user_input[key]
+                    for key in (CONF_RBW_ENTRY_ID, CONF_RBW_ITEM_ID)
+                    if key in user_input
+                },
+                CONF_COMPANY: company,
+                CONF_USERNAME: username,
+            }
+            password = user_input.get(CONF_PASSWORD) or self._data.get(CONF_PASSWORD)
+            if (
+                self._entry
+                and self.source != "reconfigure"
+                and (
+                    company.casefold() != self._entry.data[CONF_COMPANY].casefold()
+                    or username.casefold() != self._entry.data[CONF_USERNAME].casefold()
+                )
+            ):
+                errors["base"] = "different_account"
+            elif bool(selected.get(CONF_RBW_ENTRY_ID)) != bool(selected.get(CONF_RBW_ITEM_ID)):
+                errors["base"] = "rbw_incomplete"
+            elif not password and not selected.get(CONF_RBW_ENTRY_ID):
+                errors["base"] = "invalid_auth"
+            else:
                 try:
-                    self._data = await complete_mfa(
-                        self._client, self._data, user_input, hass=self.hass
+                    settings = secret_settings(selected, user_input)
+                    resolved = await credentials(self.hass, {**settings, CONF_PASSWORD: password})
+                    result = await self._client.login(
+                        company, resolved[CONF_USERNAME], resolved[CONF_PASSWORD], force=True
                     )
                 except InvalidTotp:
                     errors["base"] = "invalid_totp"
                 except WorkerError as err:
                     errors["base"] = err.code
                 else:
-                    self._mfa_pending = False
-                    return await self._finish()
-            else:
-                company = user_input[CONF_COMPANY].strip()
-                username = user_input[CONF_USERNAME].strip()
-                selected = {
-                    **self._data,
-                    **{
-                        key: user_input[key]
-                        for key in (CONF_RBW_ENTRY_ID, CONF_RBW_ITEM_ID)
-                        if key in user_input
-                    },
-                    CONF_COMPANY: company,
-                    CONF_USERNAME: username,
-                }
-                password = user_input.get(CONF_PASSWORD) or self._data.get(CONF_PASSWORD)
-                if (
-                    self._entry
-                    and self.source != "reconfigure"
-                    and (
-                        company.casefold() != self._entry.data[CONF_COMPANY].casefold()
-                        or username.casefold() != self._entry.data[CONF_USERNAME].casefold()
+                    self._data = settings
+                    self._data.update(
+                        {
+                            CONF_COMPANY: company,
+                            CONF_USERNAME: username,
+                            **(
+                                {CONF_PASSWORD: password}
+                                if not settings.get(CONF_RBW_ENTRY_ID)
+                                else {}
+                            ),
+                            CONF_PROFILE: result["profile_id"],
+                        }
                     )
-                ):
-                    errors["base"] = "different_account"
-                elif bool(selected.get(CONF_RBW_ENTRY_ID)) != bool(selected.get(CONF_RBW_ITEM_ID)):
-                    errors["base"] = "rbw_incomplete"
-                elif not password and not selected.get(CONF_RBW_ENTRY_ID):
-                    errors["base"] = "invalid_auth"
-                else:
-                    try:
-                        settings = secret_settings(selected, user_input)
-                        resolved = await credentials(
-                            self.hass, {**settings, CONF_PASSWORD: password}
-                        )
-                        result = await self._client.login(
-                            company, resolved[CONF_USERNAME], resolved[CONF_PASSWORD], force=True
-                        )
-                    except InvalidTotp:
-                        errors["base"] = "invalid_totp"
-                    except WorkerError as err:
-                        errors["base"] = err.code
-                    else:
-                        self._data = settings
-                        self._data.update(
-                            {
-                                CONF_COMPANY: company,
-                                CONF_USERNAME: username,
-                                **(
-                                    {CONF_PASSWORD: password}
-                                    if not settings.get(CONF_RBW_ENTRY_ID)
-                                    else {}
-                                ),
-                                CONF_PROFILE: result["profile_id"],
-                            }
-                        )
-                        if settings.get(CONF_RBW_ENTRY_ID):
-                            self._data.pop(CONF_PASSWORD, None)
-                            self._data.pop(CONF_TOTP_URI, None)
-                        if result.get("mfa_required"):
-                            self._mfa_pending = True
-                            if (
-                                not user_input.get(CONF_CODE)
-                                and not self._data.get(CONF_TOTP_URI)
-                                and not self._data.get(CONF_RBW_ENTRY_ID)
-                            ):
-                                errors["base"] = "mfa_required"
-                            else:
-                                try:
-                                    self._data = await complete_mfa(
-                                        self._client, self._data, user_input, hass=self.hass
-                                    )
-                                except InvalidTotp:
-                                    errors["base"] = "invalid_totp"
-                                except WorkerError as err:
-                                    errors["base"] = err.code
-                                else:
-                                    self._mfa_pending = False
-                                    return await self._finish()
+                    if settings.get(CONF_RBW_ENTRY_ID):
+                        self._data.pop(CONF_PASSWORD, None)
+                        self._data.pop(CONF_TOTP_URI, None)
+                    if result.get("mfa_required"):
+                        self._mfa_pending = True
+                        if (
+                            not user_input.get(CONF_CODE)
+                            and not self._data.get(CONF_TOTP_URI)
+                            and not self._data.get(CONF_RBW_ENTRY_ID)
+                        ):
+                            errors["base"] = "mfa_required"
                         else:
-                            return await self._finish()
-        return self.async_show_form(
-            step_id="account",
-            data_schema=account_schema(
-                self._data, existing=self._entry is not None, hass=self.hass
-            ),
-            errors=errors,
-        )
+                            try:
+                                self._data = await complete_mfa(
+                                    self._client, self._data, user_input, hass=self.hass
+                                )
+                            except InvalidTotp:
+                                errors["base"] = "invalid_totp"
+                            except WorkerError as err:
+                                errors["base"] = err.code
+                            else:
+                                self._mfa_pending = False
+                                return await self._finish()
+                    else:
+                        return await self._finish()
+        return self._show_form(errors)
 
     async def async_step_rbw_item(self, user_input: dict | None = None) -> ConfigFlowResult:
         """Choose the item once the rbw integration is known."""
         if user_input is not None:
-            return await self.async_step_account({**self._account_input, **user_input})
+            return await self._setup_step(self._step, {**self._account_input, **user_input})
         vault = self._account_input[CONF_RBW_ENTRY_ID]
-        saved = (
-            self._data.get(CONF_RBW_ITEM_ID) if self._data.get(CONF_RBW_ENTRY_ID) == vault else None
-        )
+        saved = saved_rbw_item(self._data, vault)
         options = await rbw_item_options(self.hass, vault, saved)
         return self.async_show_form(step_id="rbw_item", data_schema=rbw_item_schema(options, saved))
 

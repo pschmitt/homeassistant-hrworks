@@ -3,42 +3,105 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect browser-daemon",
-        "description": "Home Assistant runs the HR WORKS scripts through the browser-daemon run API. Select the Browser Daemon integration to use, or turn on the override to enter the URL of any node and the cluster secret instead. The profile keeps the employee login; the integration signs in to it itself. Employee login follows in the next step.",
+        "title": "HR WORKS",
+        "description": "Connect your employee account.",
         "data": {
-          "browser_daemon_entry_id": "Browser Daemon integration",
-          "browser_daemon_override": "Override with a custom URL and cluster secret",
-          "browser_daemon_url": "browser-daemon URL",
-          "browser_daemon_secret": "Cluster secret",
-          "browser_daemon_profile": "Browser profile (default: ha-hrworks; blank: throwaway)",
-          "browser_daemon_node_group": "Browser Daemon node group (optional)",
-          "name": "Device name"
+          "name": "Device name",
+          "company_id": "Company ID",
+          "username": "User ID"
+        },
+        "sections": {
+          "browser_daemon": {
+            "name": "Browser Daemon",
+            "description": "Runs the browser. Needs the Browser Daemon integration, or the override.",
+            "data": {
+              "browser_daemon_entry_id": "Browser Daemon integration",
+              "browser_daemon_override": "Use a custom URL and cluster secret",
+              "browser_daemon_url": "browser-daemon URL",
+              "browser_daemon_secret": "Cluster secret",
+              "browser_daemon_profile": "Browser profile (blank: throwaway)",
+              "browser_daemon_node_group": "Node group (optional)"
+            }
+          },
+          "credentials": {
+            "name": "Credentials",
+            "description": "rbw supplies the password and authenticator codes; its username must match. Without rbw, enter them here. Blank secret fields keep saved values. Needs the rbw integration to use rbw.",
+            "data": {
+              "rbw_entry_id": "rbw integration",
+              "password": "Password",
+              "totp_uri": "TOTP URI (optional)",
+              "clear_totp": "Remove saved TOTP URI",
+              "code": "Authenticator code (optional)"
+            }
+          }
         }
       },
       "reconfigure": {
-        "title": "Connect browser-daemon",
-        "description": "Home Assistant runs the HR WORKS scripts through the browser-daemon run API. Select the Browser Daemon integration to use, or turn on the override to enter the URL of any node and the cluster secret instead. A blank secret keeps the saved one. The profile keeps the employee login; the integration signs in to it itself. Employee login follows in the next step.",
+        "title": "HR WORKS",
+        "description": "Update this employee account. It signs in again to save the changes.",
         "data": {
-          "browser_daemon_entry_id": "Browser Daemon integration",
-          "browser_daemon_override": "Override with a custom URL and cluster secret",
-          "browser_daemon_url": "browser-daemon URL",
-          "browser_daemon_secret": "Cluster secret (blank: keep saved)",
-          "browser_daemon_profile": "Browser profile (default: ha-hrworks; blank: throwaway)",
-          "browser_daemon_node_group": "Browser Daemon node group (optional)",
-          "name": "Device name"
+          "name": "Device name",
+          "company_id": "Company ID",
+          "username": "User ID"
+        },
+        "sections": {
+          "browser_daemon": {
+            "name": "Browser Daemon",
+            "description": "Runs the browser. Needs the Browser Daemon integration, or the override.",
+            "data": {
+              "browser_daemon_entry_id": "Browser Daemon integration",
+              "browser_daemon_override": "Use a custom URL and cluster secret",
+              "browser_daemon_url": "browser-daemon URL",
+              "browser_daemon_secret": "Cluster secret",
+              "browser_daemon_profile": "Browser profile (blank: throwaway)",
+              "browser_daemon_node_group": "Node group (optional)"
+            }
+          },
+          "credentials": {
+            "name": "Credentials",
+            "description": "rbw supplies the password and authenticator codes; its username must match. Without rbw, enter them here. Blank secret fields keep saved values. Needs the rbw integration to use rbw.",
+            "data": {
+              "rbw_entry_id": "rbw integration",
+              "password": "Password",
+              "totp_uri": "TOTP URI (optional)",
+              "clear_totp": "Remove saved TOTP URI",
+              "code": "Authenticator code (optional)"
+            }
+          }
         }
       },
-      "account": {
-        "title": "Your employee account",
-        "description": "Use your employee login with a password and optional TOTP URI, or select an rbw integration and choose its item in the next step. rbw supplies fresh username, password and current authenticator codes; the username must match. Leave the rbw integration empty for direct credentials. Blank direct secret fields keep saved values.",
+      "reauth_confirm": {
+        "title": "Sign in to HR WORKS again",
+        "description": "Your session ended. Sign in again.",
         "data": {
+          "name": "Device name",
           "company_id": "Company ID",
-          "username": "User ID",
-          "rbw_entry_id": "rbw integration (optional)",
-          "password": "Password",
-          "totp_uri": "TOTP URI (optional)",
-          "clear_totp": "Remove saved TOTP URI",
-          "code": "Authenticator code (optional)"
+          "username": "User ID"
+        },
+        "sections": {
+          "browser_daemon": {
+            "name": "Browser Daemon",
+            "description": "Runs the browser. Needs the Browser Daemon integration, or the override.",
+            "data": {
+              "browser_daemon_entry_id": "Browser Daemon integration",
+              "browser_daemon_override": "Use a custom URL and cluster secret",
+              "browser_daemon_url": "browser-daemon URL",
+              "browser_daemon_secret": "Cluster secret",
+              "browser_daemon_profile": "Browser profile (blank: throwaway)",
+              "browser_daemon_node_group": "Node group (optional)"
+            }
+          },
+          "credentials": {
+            "name": "Credentials",
+            "description": "rbw supplies the password and authenticator codes; its username must match. Without rbw, enter them here. Blank secret fields keep saved values. Needs the rbw integration to use rbw.",
+            "data": {
+              "rbw_entry_id": "rbw integration",
+              "password": "Password",
+              "totp_uri": "TOTP URI (optional)",
+              "clear_totp": "Remove saved TOTP URI",
+              "code": "Authenticator code (optional)"
+            }
+          }
         }
       },
       "rbw_item": {
@@ -67,7 +130,7 @@
       "unknown": "An unexpected error occurred.",
       "invalid_totp": "Invalid TOTP URI. Use otpauth://totp/... with a Base32 secret and six digits.",
       "login_timeout": "The HR WORKS login did not reach a known login step in time. Try again later; if it persists, check the portal in a browser.",
-      "rbw_incomplete": "Choose an rbw item, or leave the rbw integration empty for direct credentials.",
+      "rbw_incomplete": "Choose an rbw item, or leave the rbw integration empty.",
       "rbw_unavailable": "Could not read the selected rbw account. Unlock the vault and check item and field permissions, then retry."
     },
     "abort": {

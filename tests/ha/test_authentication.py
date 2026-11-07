@@ -6,6 +6,7 @@ from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import probatio
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
@@ -13,8 +14,8 @@ from custom_components.hrworks.api import WorkerError
 from custom_components.hrworks.auth import authenticate, complete_mfa, credentials, secret_settings
 from custom_components.hrworks.config_flow import (
     HrworksConfigFlow,
-    account_schema,
-    connection_schema,
+    credential_fields,
+    setup_schema,
 )
 from custom_components.hrworks.coordinator import (
     AUTH_RETRY_BACKOFF,
@@ -23,6 +24,7 @@ from custom_components.hrworks.coordinator import (
     HrworksCoordinator,
 )
 from custom_components.hrworks.repairs import EmployeeLoginRepair, WorkerUnavailableRepair
+from custom_components.hrworks.setup_form import browser_daemon_fields
 from custom_components.hrworks.totp import InvalidTotp
 
 URI = "otpauth://totp/Example:test?secret=JBSWY3DPEHPK3PXP"
@@ -57,11 +59,14 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
             ({"browser_daemon_profile": "hrworks"}, "hrworks"),
             ({"browser_daemon_profile": ""}, ""),
         ):
-            markers = {key.schema: key for key in connection_schema(defaults, MagicMock()).schema}
+            markers = {
+                key.schema: key
+                for key in browser_daemon_fields(MagicMock(), defaults, profile="ha-hrworks")
+            }
             self.assertEqual(markers["browser_daemon_profile"].default(), expected)
 
     def test_account_fields_depend_on_vault_selection(self):
-        markers = {key.schema: key for key in account_schema({}).schema}
+        markers = {key.schema: key for key in credential_fields({}, MagicMock())}
         direct = {"field": "rbw_entry_id", "operator": "not_exists"}
         self.assertEqual(markers["password"].visible, direct)
         self.assertEqual(markers["totp_uri"].visible, direct)
@@ -77,37 +82,56 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
             ({"rbw_entry_id": "saved-vault"}, "saved-vault"),
         ):
             with self.subTest(defaults=defaults):
-                schema = account_schema(defaults, hass=hass)
+                schema = probatio.Schema(credential_fields(defaults, hass))
                 markers = {key.schema: key for key in schema.schema}
                 self.assertEqual(markers["rbw_entry_id"].description, {"suggested_value": expected})
                 # Clearing the picker must not bring a saved vault back.
-                self.assertNotIn(
-                    "rbw_entry_id", schema({"company_id": "example", "username": "employee"})
-                )
+                self.assertNotIn("rbw_entry_id", schema({}))
 
-    def test_vault_picker_needs_an_rbw_integration(self):
+    def test_pickers_are_grey_without_their_integration(self):
         hass = MagicMock()
         hass.config_entries.async_entries.return_value = []
-        self.assertNotIn(
-            "rbw_entry_id", {key.schema for key in account_schema({}, hass=hass).schema}
-        )
+        for fields, name, integration in (
+            (
+                browser_daemon_fields(hass, {}, profile="p"),
+                "browser_daemon_entry_id",
+                "browser_daemon",
+            ),
+            (credential_fields({}, hass), "rbw_entry_id", "rbw"),
+        ):
+            selector = next(value for key, value in fields.items() if key.schema == name)
+            self.assertEqual(selector.config["integration"], integration)
+            self.assertIs(selector.config["read_only"], True)
 
     def test_pickers_use_the_config_entry_selector(self):
         hass = MagicMock()
         hass.config_entries.async_entries.return_value = [
             SimpleNamespace(entry_id="entry", disabled_by=None)
         ]
-        for schema, name, integration in (
-            (connection_schema({}, hass), "browser_daemon_entry_id", "browser_daemon"),
-            (account_schema({}, hass=hass), "rbw_entry_id", "rbw"),
+        for fields, name, integration in (
+            (
+                browser_daemon_fields(hass, {}, profile="p"),
+                "browser_daemon_entry_id",
+                "browser_daemon",
+            ),
+            (credential_fields({}, hass), "rbw_entry_id", "rbw"),
         ):
-            selector = next(value for key, value in schema.schema.items() if key.schema == name)
+            selector = next(value for key, value in fields.items() if key.schema == name)
             self.assertEqual(
                 selector.serialize()["selector"]["config_entry"]["integration"], integration
             )
+            self.assertNotIn("read_only", selector.config)
+
+    def test_dialog_order_and_sections_match_teams(self):
+        hass = MagicMock()
+        hass.config_entries.async_entries.return_value = []
+        schema = setup_schema({}, hass)
+        self.assertEqual(
+            [str(key) for key in schema.schema],
+            ["name", "company_id", "username", "browser_daemon", "credentials"],
+        )
 
     def test_native_visibility_serializes_and_strips_hidden_credentials(self):
-        import probatio
         from homeassistant.data_entry_flow import (
             _strip_hidden_fields,
             add_visible_conditions_to_serialized_schema,
@@ -118,7 +142,7 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
         hass.config_entries.async_entries.return_value = [
             SimpleNamespace(entry_id="vault", title="Vault")
         ]
-        schema = account_schema({}, hass=hass)
+        schema = probatio.Schema(credential_fields({}, hass))
         fields = probatio.to_field_list(schema, custom_serializer=cv.custom_serializer)
         add_visible_conditions_to_serialized_schema(schema, fields)
         password = next(field for field in fields if field["name"] == "password")
@@ -126,8 +150,6 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
         vault = next(field for field in fields if field["name"] == "rbw_entry_id")
         self.assertEqual(vault["selector"]["config_entry"]["integration"], "rbw")
         vault_input = {
-            "company_id": "example",
-            "username": "employee",
             "password": "hidden",
             "rbw_entry_id": "vault",
             "totp_uri": "hidden",
@@ -139,8 +161,6 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
         direct_schema, direct_input = _strip_hidden_fields(
             schema,
             {
-                "company_id": "example",
-                "username": "employee",
                 "password": "direct",
                 "totp_uri": URI,
                 "code": "123456",
@@ -165,7 +185,7 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
         with patch.dict(
             sys.modules, {"custom_components.rbw": SimpleNamespace(async_list_items=listed)}
         ):
-            form = await flow.async_step_account({**DATA, "rbw_entry_id": "vault"})
+            form = await flow.async_step_user({**DATA, "rbw_entry_id": "vault"})
         self.assertEqual(form["step_id"], "rbw_item")
         flow._client.login.assert_not_awaited()
         selector = next(iter(form["data_schema"].schema.values()))
@@ -184,6 +204,7 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
                 }
             ),
         ):
+            flow._connect = AsyncMock(return_value={})
             result = await flow.async_step_rbw_item({"rbw_item_id": "a-id"})
         self.assertEqual(result["type"], "done")
         self.assertEqual(flow._data["rbw_entry_id"], "vault")
@@ -196,11 +217,12 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
                     "reconfigure",
                     data={**DATA, "rbw_entry_id": "old-vault", "rbw_item_id": "old-item"},
                 )
+                flow._get_reconfigure_entry = lambda: flow._entry
                 listed = AsyncMock(return_value=[{"id": "only", "name": "Only", "fields": []}])
                 with patch.dict(
                     sys.modules, {"custom_components.rbw": SimpleNamespace(async_list_items=listed)}
                 ):
-                    form = await flow.async_step_account({**DATA, "rbw_entry_id": chosen})
+                    form = await flow.async_step_reconfigure({**DATA, "rbw_entry_id": chosen})
                 marker = next(iter(form["data_schema"].schema))
                 self.assertEqual(marker.default(), expected)
 
@@ -210,7 +232,7 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
         with patch.dict(
             sys.modules, {"custom_components.rbw": SimpleNamespace(async_list_items=unavailable)}
         ):
-            form = await flow.async_step_account({**DATA, "rbw_entry_id": "vault"})
+            form = await flow.async_step_user({**DATA, "rbw_entry_id": "vault"})
         selector = next(iter(form["data_schema"].schema.values()))
         self.assertEqual(selector.config["options"], [])
         self.assertTrue(selector.config["custom_value"])
@@ -229,7 +251,7 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
                             "authenticated": True,
                         }
                         supplied = {**DATA, **cleared, **hidden}
-                        result = await flow.async_step_account(supplied)
+                        result = await flow._login(supplied)
                         self.assertEqual(result["type"], "done")
                         self.assertEqual(flow._data["rbw_entry_id"], "")
                         self.assertEqual(flow._data["rbw_item_id"], "")
@@ -312,7 +334,7 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
         with patch.dict(
             "sys.modules", {"custom_components.rbw": SimpleNamespace(async_get_field=reader)}
         ):
-            result = await flow.async_step_account(
+            result = await flow._login(
                 {**DATA, "rbw_entry_id": "vault", "rbw_item_id": "item", "totp_uri": URI}
             )
         self.assertEqual(result["type"], "done")
@@ -331,13 +353,13 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_incomplete_rbw_selection_does_not_login(self):
         flow = self.flow()
-        result = await flow.async_step_account({**DATA, "rbw_entry_id": "vault", "rbw_item_id": ""})
+        result = await flow._login({**DATA, "rbw_entry_id": "vault", "rbw_item_id": ""})
         self.assertEqual(result["errors"]["base"], "rbw_incomplete")
         flow._client.login.assert_not_awaited()
 
     async def test_setup_generates_code_from_uri(self):
         flow = self.flow()
-        result = await flow.async_step_account({**DATA, "totp_uri": URI})
+        result = await flow._login({**DATA, "totp_uri": URI})
         self.assertEqual(result["type"], "done")
         flow._client.login.assert_awaited_once_with(
             "example", "employee", "test-password", force=True
@@ -349,7 +371,7 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_reconfigure_username_and_password(self):
         flow = self.flow("reconfigure")
-        await flow.async_step_account(
+        await flow._login(
             {"company_id": "example", "username": "other", "password": "changed", "totp_uri": URI}
         )
         self.assertEqual(flow._data["username"], "other")
@@ -357,7 +379,7 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_reauth_cannot_silently_switch_accounts(self):
         flow = self.flow("reauth")
-        result = await flow.async_step_account(
+        result = await flow._login(
             {"company_id": "example", "username": "other", "password": "changed"}
         )
         self.assertEqual(result["errors"]["base"], "different_account")
@@ -366,25 +388,25 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
     async def test_failed_totp_falls_back_to_manual_code(self):
         flow = self.flow()
         flow._client.mfa.side_effect = [WorkerError("invalid_code"), {}]
-        result = await flow.async_step_account({**DATA, "totp_uri": URI})
-        self.assertEqual(result["step_id"], "account")
+        result = await flow._login({**DATA, "totp_uri": URI})
+        self.assertEqual(result["step_id"], "user")
         self.assertEqual(result["errors"]["base"], "invalid_code")
-        await flow.async_step_account({"code": "123456"})
+        await flow._login({"code": "123456"})
         flow._client.mfa.assert_awaited_with("123456")
         flow._finish.assert_awaited_once()
 
     async def test_uri_can_be_entered_only_at_mfa_challenge(self):
         flow = self.flow()
-        result = await flow.async_step_account(DATA)
-        self.assertEqual(result["step_id"], "account")
+        result = await flow._login(DATA)
+        self.assertEqual(result["step_id"], "user")
         self.assertEqual(result["errors"]["base"], "mfa_required")
         flow._client.mfa.assert_not_awaited()
-        await flow.async_step_account({"totp_uri": URI})
+        await flow._login({"totp_uri": URI})
         self.assertEqual(flow._data["totp_uri"], URI)
 
     async def test_invalid_uri_does_not_contact_worker(self):
         flow = self.flow()
-        result = await flow.async_step_account({**DATA, "totp_uri": "https://example.org/secret"})
+        result = await flow._login({**DATA, "totp_uri": "https://example.org/secret"})
         self.assertEqual(result["errors"]["base"], "invalid_totp")
         flow._client.login.assert_not_awaited()
 
@@ -394,8 +416,7 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("totp_uri", secret_settings(settings, {"clear_totp": True}))
         with self.assertRaises(InvalidTotp):
             secret_settings(DATA, {"totp_uri": URI + "&digits=8"})
-        schema = account_schema(settings, existing=True)
-        for key in schema.schema:
+        for key in credential_fields(settings, MagicMock()):
             if str(key) in {"password", "totp_uri"}:
                 self.assertNotEqual(key.default, URI)
                 self.assertNotEqual(key.default, DATA["password"])

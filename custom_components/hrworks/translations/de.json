@@ -3,42 +3,105 @@
   "config": {
     "step": {
       "user": {
-        "title": "browser-daemon verbinden",
-        "description": "Home Assistant führt die HR-WORKS-Skripte über die Run-API von browser-daemon aus. Wähle die zu verwendende Browser-Daemon-Integration oder aktiviere das Überschreiben, um stattdessen die URL eines beliebigen Knotens und das Cluster-Geheimnis einzugeben. Das Profil behält die Mitarbeiteranmeldung; die Integration meldet sich selbst an. Die Mitarbeiteranmeldung folgt im nächsten Schritt.",
+        "title": "HR WORKS",
+        "description": "Verbinde dein Mitarbeiterkonto.",
         "data": {
-          "browser_daemon_entry_id": "Browser-Daemon-Integration",
-          "browser_daemon_override": "Mit eigener URL und eigenem Cluster-Geheimnis überschreiben",
-          "browser_daemon_url": "browser-daemon-URL",
-          "browser_daemon_secret": "Cluster-Geheimnis",
-          "browser_daemon_profile": "Browser-Profil (Standard: ha-hrworks; leer: temporär)",
-          "browser_daemon_node_group": "Browser-Daemon-Knotengruppe (optional)",
-          "name": "Gerätename"
+          "name": "Gerätename",
+          "company_id": "Firmen-ID",
+          "username": "Benutzer-ID"
+        },
+        "sections": {
+          "browser_daemon": {
+            "name": "Browser Daemon",
+            "description": "Führt den Browser aus. Braucht die Browser-Daemon-Integration oder die eigene URL.",
+            "data": {
+              "browser_daemon_entry_id": "Browser-Daemon-Integration",
+              "browser_daemon_override": "Eigene URL und Cluster-Secret verwenden",
+              "browser_daemon_url": "browser-daemon-URL",
+              "browser_daemon_secret": "Cluster-Secret",
+              "browser_daemon_profile": "Browser-Profil (leer: temporär)",
+              "browser_daemon_node_group": "Node-Gruppe (optional)"
+            }
+          },
+          "credentials": {
+            "name": "Anmeldedaten",
+            "description": "rbw liefert Passwort und Authenticator-Codes; der Benutzername muss übereinstimmen. Ohne rbw gibst du sie hier ein. Leere Geheimnisfelder behalten gespeicherte Werte. rbw braucht die rbw-Integration.",
+            "data": {
+              "rbw_entry_id": "rbw-Integration",
+              "password": "Passwort",
+              "totp_uri": "TOTP-URI (optional)",
+              "clear_totp": "Gespeicherte TOTP-URI entfernen",
+              "code": "Authenticator-Code (optional)"
+            }
+          }
         }
       },
       "reconfigure": {
-        "title": "browser-daemon verbinden",
-        "description": "Home Assistant führt die HR-WORKS-Skripte über die Run-API von browser-daemon aus. Wähle die zu verwendende Browser-Daemon-Integration oder aktiviere das Überschreiben, um stattdessen die URL eines beliebigen Knotens und das Cluster-Geheimnis einzugeben. Ein leeres Geheimnis behält das gespeicherte. Das Profil behält die Mitarbeiteranmeldung; die Integration meldet sich selbst an. Die Mitarbeiteranmeldung folgt im nächsten Schritt.",
+        "title": "HR WORKS",
+        "description": "Aktualisiere dieses Mitarbeiterkonto. Zum Speichern meldet es sich neu an.",
         "data": {
-          "browser_daemon_entry_id": "Browser-Daemon-Integration",
-          "browser_daemon_override": "Mit eigener URL und eigenem Cluster-Geheimnis überschreiben",
-          "browser_daemon_url": "browser-daemon-URL",
-          "browser_daemon_secret": "Cluster-Geheimnis (leer: gespeichertes behalten)",
-          "browser_daemon_profile": "Browser-Profil (Standard: ha-hrworks; leer: temporär)",
-          "browser_daemon_node_group": "Browser-Daemon-Knotengruppe (optional)",
-          "name": "Gerätename"
+          "name": "Gerätename",
+          "company_id": "Firmen-ID",
+          "username": "Benutzer-ID"
+        },
+        "sections": {
+          "browser_daemon": {
+            "name": "Browser Daemon",
+            "description": "Führt den Browser aus. Braucht die Browser-Daemon-Integration oder die eigene URL.",
+            "data": {
+              "browser_daemon_entry_id": "Browser-Daemon-Integration",
+              "browser_daemon_override": "Eigene URL und Cluster-Secret verwenden",
+              "browser_daemon_url": "browser-daemon-URL",
+              "browser_daemon_secret": "Cluster-Secret",
+              "browser_daemon_profile": "Browser-Profil (leer: temporär)",
+              "browser_daemon_node_group": "Node-Gruppe (optional)"
+            }
+          },
+          "credentials": {
+            "name": "Anmeldedaten",
+            "description": "rbw liefert Passwort und Authenticator-Codes; der Benutzername muss übereinstimmen. Ohne rbw gibst du sie hier ein. Leere Geheimnisfelder behalten gespeicherte Werte. rbw braucht die rbw-Integration.",
+            "data": {
+              "rbw_entry_id": "rbw-Integration",
+              "password": "Passwort",
+              "totp_uri": "TOTP-URI (optional)",
+              "clear_totp": "Gespeicherte TOTP-URI entfernen",
+              "code": "Authenticator-Code (optional)"
+            }
+          }
         }
       },
-      "account": {
-        "title": "Dein Mitarbeiterkonto",
-        "description": "Verwende deine Mitarbeiteranmeldung mit Passwort und optionaler TOTP-URI oder wähle eine rbw-Integration und im nächsten Schritt ihren Eintrag. rbw liefert aktuelle Benutzernamen, Passwörter und Authenticator-Codes; der Benutzername muss übereinstimmen. Für direkte Anmeldedaten die rbw-Integration leer lassen. Leere direkte Geheimnisfelder behalten gespeicherte Werte.",
+      "reauth_confirm": {
+        "title": "Erneut bei HR WORKS anmelden",
+        "description": "Deine Sitzung ist abgelaufen. Melde dich erneut an.",
         "data": {
-          "company_id": "Firmenkennung",
-          "username": "Benutzerkennung",
-          "rbw_entry_id": "rbw-Integration (optional)",
-          "password": "Passwort",
-          "totp_uri": "TOTP-URI (optional)",
-          "clear_totp": "Gespeicherte TOTP-URI entfernen",
-          "code": "Authenticator-Code (optional)"
+          "name": "Gerätename",
+          "company_id": "Firmen-ID",
+          "username": "Benutzer-ID"
+        },
+        "sections": {
+          "browser_daemon": {
+            "name": "Browser Daemon",
+            "description": "Führt den Browser aus. Braucht die Browser-Daemon-Integration oder die eigene URL.",
+            "data": {
+              "browser_daemon_entry_id": "Browser-Daemon-Integration",
+              "browser_daemon_override": "Eigene URL und Cluster-Secret verwenden",
+              "browser_daemon_url": "browser-daemon-URL",
+              "browser_daemon_secret": "Cluster-Secret",
+              "browser_daemon_profile": "Browser-Profil (leer: temporär)",
+              "browser_daemon_node_group": "Node-Gruppe (optional)"
+            }
+          },
+          "credentials": {
+            "name": "Anmeldedaten",
+            "description": "rbw liefert Passwort und Authenticator-Codes; der Benutzername muss übereinstimmen. Ohne rbw gibst du sie hier ein. Leere Geheimnisfelder behalten gespeicherte Werte. rbw braucht die rbw-Integration.",
+            "data": {
+              "rbw_entry_id": "rbw-Integration",
+              "password": "Passwort",
+              "totp_uri": "TOTP-URI (optional)",
+              "clear_totp": "Gespeicherte TOTP-URI entfernen",
+              "code": "Authenticator-Code (optional)"
+            }
+          }
         }
       },
       "rbw_item": {
@@ -67,7 +130,7 @@
       "unknown": "Ein unerwarteter Fehler ist aufgetreten.",
       "invalid_totp": "Ungültige TOTP-URI. Verwende otpauth://totp/... mit einem Base32-Geheimnis und sechs Stellen.",
       "login_timeout": "Die HR-WORKS-Anmeldung hat keinen bekannten Anmeldeschritt rechtzeitig erreicht. Versuche es später erneut; prüfe das Portal im Browser, falls es weiter auftritt.",
-      "rbw_incomplete": "Wähle einen rbw-Eintrag oder lasse die rbw-Integration für direkte Anmeldedaten leer.",
+      "rbw_incomplete": "Bitte einen rbw-Eintrag auswählen oder die rbw-Integration leer lassen.",
       "rbw_unavailable": "Das gewählte rbw-Konto konnte nicht gelesen werden. Entsperre den Tresor und prüfe die Berechtigungen für Eintrag und Felder."
     },
     "abort": {

@@ -7,7 +7,7 @@ from homeassistant.helpers import issue_registry as ir
 
 from .api import WorkerError, create_client
 from .auth import complete_mfa, credentials, secret_settings
-from .config_flow import account_schema, mfa_schema
+from .config_flow import credential_fields, mfa_schema
 from .const import CONF_COMPANY, CONF_TOTP_URI, DOMAIN
 from .coordinator import clear_issues
 from .totp import InvalidTotp
@@ -75,10 +75,8 @@ class EmployeeLoginRepair(RepairsFlow):
         """Keep credentials and MFA input together in the repair form."""
         fields = {
             key: value
-            for key, value in account_schema(
-                entry.data, existing=True, hass=self.hass
-            ).schema.items()
-            if str(key) not in {CONF_COMPANY, CONF_USERNAME, "rbw_entry_id", "rbw_item_id"}
+            for key, value in credential_fields(entry.data, self.hass).items()
+            if str(key) != "rbw_entry_id"
         }
         if entry.data.get("rbw_entry_id"):
             fields = {}

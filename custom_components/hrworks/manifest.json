@@ -2,7 +2,8 @@
   "domain": "hrworks",
   "name": "HR WORKS",
   "after_dependencies": [
-    "browser_daemon"
+    "browser_daemon",
+    "rbw"
   ],
   "codeowners": [
     "@pschmitt"

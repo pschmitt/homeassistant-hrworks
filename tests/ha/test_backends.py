@@ -35,7 +35,7 @@ def flow(data):
     result._entry = SimpleNamespace(data=dict(data), title="HR WORKS")
     result._get_reconfigure_entry = lambda: result._entry
     result._data = dict(data)
-    result.async_step_account = AsyncMock(return_value={"type": "account"})
+    result._login = AsyncMock(return_value={"type": "account"})
     return result
 
 
@@ -72,7 +72,7 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(flow_._data["browser_daemon_secret"], "cluster")
         self.assertNotIn("backend", flow_._data)
         self.assertEqual(flow_._title, "Work")
-        flow_.async_step_account.assert_awaited_once()
+        flow_._login.assert_awaited_once()
 
     async def test_blank_secret_keeps_the_saved_one(self):
         flow_ = flow({**ACCOUNT, "browser_daemon_secret": "kept"})
@@ -142,23 +142,33 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
         daemon = SimpleNamespace(entry_id="bd1", title="Browser Daemon (a)", disabled_by=None)
         disabled = SimpleNamespace(entry_id="off", title="Off", disabled_by="user")
         setup.hass.config_entries.async_entries.return_value = [daemon, disabled]
-        schema = (await setup.async_step_user())["data_schema"].schema
+        form = await setup.async_step_user()
+        schema = (
+            form["data_schema"]
+            .schema[next(k for k in form["data_schema"].schema if str(k) == "browser_daemon")]
+            .schema.schema
+        )
         markers = {key.schema: key for key in schema}
         picker = schema[markers["browser_daemon_entry_id"]]
         self.assertEqual(picker.config["integration"], "browser_daemon")
         self.assertEqual(markers["browser_daemon_entry_id"].default(), "bd1")
         self.assertIs(markers["browser_daemon_override"].default(), False)
-        override = {"field": "browser_daemon_override", "value": True}
+        override = [{"field": "browser_daemon_override", "value": True}]
         self.assertEqual(markers["browser_daemon_url"].visible, override)
         self.assertEqual(markers["browser_daemon_secret"].visible, override)
 
-    async def test_form_without_integration_only_offers_the_override(self):
+    async def test_form_without_integration_greys_the_picker_and_offers_the_override(self):
         setup = HrworksConfigFlow()
         setup.hass = MagicMock()
         setup.hass.config_entries.async_entries.return_value = []
-        schema = (await setup.async_step_user())["data_schema"].schema
+        form = await setup.async_step_user()
+        schema = (
+            form["data_schema"]
+            .schema[next(k for k in form["data_schema"].schema if str(k) == "browser_daemon")]
+            .schema.schema
+        )
         markers = {key.schema: key for key in schema}
-        self.assertNotIn("browser_daemon_entry_id", markers)
+        self.assertIs(schema[markers["browser_daemon_entry_id"]].config["read_only"], True)
         self.assertIs(markers["browser_daemon_override"].default(), True)
 
     async def test_url_without_secret_is_invalid(self):
