@@ -12,12 +12,13 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import logging
 import re
 import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 from zoneinfo import ZoneInfo
 
 import aiohttp
@@ -28,6 +29,9 @@ from .models import TYPE_LABELS
 
 BERLIN = ZoneInfo("Europe/Berlin")
 CLIENT_NAME = "Home Assistant · HR WORKS"
+_LOGGER = logging.getLogger(__name__)
+# The integration's brand logo (absent when the library runs on its own).
+PROFILE_ICON = Path(__file__).resolve().parents[1] / "brand" / "icon.png"
 MFA_WINDOW = timedelta(minutes=10)
 SCRIPT_DIR = Path(__file__).parent / "scripts"
 OPERATIONS = (
@@ -286,8 +290,12 @@ class BrowserDaemonClient:
                             node=self._node,
                             json={"name": self.browser_profile, "engine": "chromium"},
                         )
-                    elif self._node is None:
-                        self._node = found.get("node_name")
+                        await self._set_profile_icon()
+                    else:
+                        if self._node is None:
+                            self._node = found.get("node_name")
+                        if not found.get("icon_rev"):
+                            await self._set_profile_icon()
                 else:
                     if self._session is None:
                         session = await self._client().create_session(
@@ -325,6 +333,19 @@ class BrowserDaemonClient:
                     "write_uncertain" if write and uncertain else code, stage=stage, detail=detail
                 ) from None
         return res
+
+    async def _set_profile_icon(self) -> None:
+        """Give a profile without a picture the HR WORKS logo. Never raises."""
+        try:
+            data = await asyncio.to_thread(PROFILE_ICON.read_bytes)
+            await self._client()._request(
+                "PUT",
+                f"/api/profiles/{quote(self.browser_profile or '', safe='')}/icon",
+                node=self._node,
+                data=aiohttp.BytesPayload(data, content_type="image/png"),
+            )
+        except (BrowserDaemonError, OSError):
+            _LOGGER.debug("Could not set the browser-daemon profile picture", exc_info=True)
 
     def _path(self) -> str:
         if not self.profile:
