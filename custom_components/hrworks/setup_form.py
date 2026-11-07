@@ -152,10 +152,14 @@ def rbw_fields(
 
 
 def clear_rbw_when_empty(data: dict[str, Any]) -> dict[str, Any]:
-    """An empty picker means no rbw, and discards any saved item."""
+    """An empty picker means no rbw and discards any saved item.
+
+    A submitted form has no item when it was left blank, which must not bring back the
+    saved one.
+    """
     if not data.get(RBW_ENTRY_ID):
         return {**data, RBW_ENTRY_ID: "", RBW_ITEM_ID: ""}
-    return data
+    return {RBW_ITEM_ID: "", **data}
 
 
 async def rbw_item_options(hass: Any, saved: Mapping[str, Any]) -> list[SelectOptionDict]:
