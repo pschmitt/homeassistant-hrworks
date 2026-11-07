@@ -134,10 +134,10 @@ def browser_daemon_fields(
 
 
 def choice(options: list[str], translation_key: str) -> SelectSelector:
-    """A short list of labelled options, all visible at once."""
+    """A dropdown of labelled options, like the integration pickers next to it."""
     return SelectSelector(
         SelectSelectorConfig(
-            options=options, translation_key=translation_key, mode=SelectSelectorMode.LIST
+            options=options, translation_key=translation_key, mode=SelectSelectorMode.DROPDOWN
         )
     )
 
@@ -161,7 +161,7 @@ def credentials_provider_field(
         )
         default = PROVIDER_RBW if rbw else PROVIDER_MANUAL
     return {
-        data_entry_flow.Optional(CREDENTIALS_PROVIDER, default=default, visible=visible): choice(
+        data_entry_flow.Required(CREDENTIALS_PROVIDER, default=default, visible=visible): choice(
             [PROVIDER_RBW, PROVIDER_MANUAL], CREDENTIALS_PROVIDER
         )
     }
