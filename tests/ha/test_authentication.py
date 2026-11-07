@@ -1,10 +1,12 @@
 """Exercise real HA flow classes with a fake worker, never real HR records."""
 
+import sys
 import unittest
 from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.hrworks.api import WorkerError
@@ -63,9 +65,7 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
         direct = {"field": "rbw_entry_id", "operator": "not_exists"}
         self.assertEqual(markers["password"].visible, direct)
         self.assertEqual(markers["totp_uri"].visible, direct)
-        self.assertEqual(
-            markers["rbw_item_id"].visible, {"field": "rbw_entry_id", "operator": "exists"}
-        )
+        self.assertNotIn("rbw_item_id", markers)
 
     def test_vault_picker_only_suggests_a_saved_vault(self):
         hass = MagicMock()
@@ -125,14 +125,11 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(password["visible"], {"field": "rbw_entry_id", "operator": "not_exists"})
         vault = next(field for field in fields if field["name"] == "rbw_entry_id")
         self.assertEqual(vault["selector"]["config_entry"]["integration"], "rbw")
-        item = next(field for field in fields if field["name"] == "rbw_item_id")
-        self.assertEqual(item["visible"], {"field": "rbw_entry_id", "operator": "exists"})
         vault_input = {
             "company_id": "example",
             "username": "employee",
             "password": "hidden",
             "rbw_entry_id": "vault",
-            "rbw_item_id": "item",
             "totp_uri": "hidden",
         }
         visible_schema, visible_input = _strip_hidden_fields(schema, vault_input)
@@ -145,17 +142,78 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
                 "company_id": "example",
                 "username": "employee",
                 "password": "direct",
-                "rbw_item_id": "stale-item",
                 "totp_uri": URI,
                 "code": "123456",
             },
         )
         direct = direct_schema(direct_input)
-        self.assertNotIn("rbw_item_id", direct)
         self.assertEqual(direct["password"], "direct")
         self.assertEqual(direct["totp_uri"], URI)
         self.assertEqual(direct["code"], "123456")
         self.assertNotIn("rbw_entry_id", direct)
+
+    async def test_item_step_lists_names_and_continues_the_login(self):
+        flow = self.flow("user", data=dict(DATA))
+        flow._client.login.return_value = {"profile_id": "b" * 64, "authenticated": True}
+        listed = AsyncMock(
+            return_value=[
+                {"id": "b-id", "name": "zeta", "fields": []},
+                {"id": "a-id", "name": "Alpha", "fields": []},
+                {"id": "locked-id", "name": None, "fields": []},
+            ]
+        )
+        with patch.dict(
+            sys.modules, {"custom_components.rbw": SimpleNamespace(async_list_items=listed)}
+        ):
+            form = await flow.async_step_account({**DATA, "rbw_entry_id": "vault"})
+        self.assertEqual(form["step_id"], "rbw_item")
+        flow._client.login.assert_not_awaited()
+        selector = next(iter(form["data_schema"].schema.values()))
+        self.assertEqual(
+            [(option["value"], option["label"]) for option in selector.config["options"]],
+            [("a-id", "Alpha"), ("locked-id", "locked-id"), ("b-id", "zeta")],
+        )
+        self.assertTrue(selector.config["custom_value"])
+        with patch(
+            "custom_components.hrworks.config_flow.credentials",
+            AsyncMock(
+                return_value={
+                    "username": "employee",
+                    "password": "test-password",
+                    "company_id": "example",
+                }
+            ),
+        ):
+            result = await flow.async_step_rbw_item({"rbw_item_id": "a-id"})
+        self.assertEqual(result["type"], "done")
+        self.assertEqual(flow._data["rbw_entry_id"], "vault")
+        self.assertEqual(flow._data["rbw_item_id"], "a-id")
+
+    async def test_item_step_preselects_only_the_item_of_the_same_vault(self):
+        for chosen, expected in (("old-vault", "old-item"), ("new-vault", "only")):
+            with self.subTest(chosen=chosen):
+                flow = self.flow(
+                    "reconfigure",
+                    data={**DATA, "rbw_entry_id": "old-vault", "rbw_item_id": "old-item"},
+                )
+                listed = AsyncMock(return_value=[{"id": "only", "name": "Only", "fields": []}])
+                with patch.dict(
+                    sys.modules, {"custom_components.rbw": SimpleNamespace(async_list_items=listed)}
+                ):
+                    form = await flow.async_step_account({**DATA, "rbw_entry_id": chosen})
+                marker = next(iter(form["data_schema"].schema))
+                self.assertEqual(marker.default(), expected)
+
+    async def test_item_step_takes_a_typed_id_when_rbw_lists_nothing(self):
+        flow = self.flow("user", data=dict(DATA))
+        unavailable = AsyncMock(side_effect=HomeAssistantError("not loaded"))
+        with patch.dict(
+            sys.modules, {"custom_components.rbw": SimpleNamespace(async_list_items=unavailable)}
+        ):
+            form = await flow.async_step_account({**DATA, "rbw_entry_id": "vault"})
+        selector = next(iter(form["data_schema"].schema.values()))
+        self.assertEqual(selector.config["options"], [])
+        self.assertTrue(selector.config["custom_value"])
 
     async def test_disabling_vault_clears_hidden_old_item(self):
         for source in ("user", "reconfigure", "reauth"):
@@ -273,7 +331,7 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_incomplete_rbw_selection_does_not_login(self):
         flow = self.flow()
-        result = await flow.async_step_account({**DATA, "rbw_entry_id": "vault"})
+        result = await flow.async_step_account({**DATA, "rbw_entry_id": "vault", "rbw_item_id": ""})
         self.assertEqual(result["errors"]["base"], "rbw_incomplete")
         flow._client.login.assert_not_awaited()
 

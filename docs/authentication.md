@@ -36,8 +36,10 @@ Home Assistant; only a generated current code is sent to browser-daemon.
 
 ## Home Assistant rbw integration
 
-Select an rbw integration and an employee account item ID together. Grant that
-rbw client access only to this item's `username`, `password` and current `totp`
+Select an rbw integration, then choose the employee account item in the next
+step. It lists the items rbw allows HR WORKS to read, by name; you can also
+enter an item ID, and rbw asks you to allow it under Repairs. Grant that rbw
+client access only to this item's `username`, `password` and current `totp`
 fields. The username must match the configured employee. The company ID stays
 in the HR WORKS entry.
 

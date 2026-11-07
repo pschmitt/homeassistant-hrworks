@@ -30,16 +30,22 @@
       },
       "account": {
         "title": "Your employee account",
-        "description": "Use your employee login with a password and optional TOTP URI, or select an rbw integration and item ID. rbw supplies fresh username, password and current authenticator codes; the username must match. Leave both rbw fields empty for direct credentials. Blank direct secret fields keep saved values.",
+        "description": "Use your employee login with a password and optional TOTP URI, or select an rbw integration and choose its item in the next step. rbw supplies fresh username, password and current authenticator codes; the username must match. Leave the rbw integration empty for direct credentials. Blank direct secret fields keep saved values.",
         "data": {
           "company_id": "Company ID",
           "username": "User ID",
           "rbw_entry_id": "rbw integration (optional)",
-          "rbw_item_id": "rbw employee account item ID (optional)",
           "password": "Password",
           "totp_uri": "TOTP URI (optional)",
           "clear_totp": "Remove saved TOTP URI",
           "code": "Authenticator code (optional)"
+        }
+      },
+      "rbw_item": {
+        "title": "Choose the rbw item",
+        "description": "These are the vault items rbw allows this integration to read. To offer more, allow them in the rbw integration's options. You can also enter an item ID here: rbw then asks you to allow it under Repairs.",
+        "data": {
+          "rbw_item_id": "Vault item"
         }
       }
     },
@@ -61,7 +67,7 @@
       "unknown": "An unexpected error occurred.",
       "invalid_totp": "Invalid TOTP URI. Use otpauth://totp/... with a Base32 secret and six digits.",
       "login_timeout": "The HR WORKS login did not reach a known login step in time. Try again later; if it persists, check the portal in a browser.",
-      "rbw_incomplete": "Select both an rbw integration and an item ID, or leave both empty for direct credentials.",
+      "rbw_incomplete": "Choose an rbw item, or leave the rbw integration empty for direct credentials.",
       "rbw_unavailable": "Could not read the selected rbw account. Unlock the vault and check item and field permissions, then retry."
     },
     "abort": {

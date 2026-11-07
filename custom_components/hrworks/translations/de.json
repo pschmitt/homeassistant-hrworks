@@ -30,16 +30,22 @@
       },
       "account": {
         "title": "Dein Mitarbeiterkonto",
-        "description": "Verwende deine Mitarbeiteranmeldung mit Passwort und optionaler TOTP-URI oder wähle eine rbw-Integration und Eintrags-ID. rbw liefert aktuelle Benutzernamen, Passwörter und Authenticator-Codes; der Benutzername muss übereinstimmen. Für direkte Anmeldedaten beide rbw-Felder leer lassen. Leere direkte Geheimnisfelder behalten gespeicherte Werte.",
+        "description": "Verwende deine Mitarbeiteranmeldung mit Passwort und optionaler TOTP-URI oder wähle eine rbw-Integration und im nächsten Schritt ihren Eintrag. rbw liefert aktuelle Benutzernamen, Passwörter und Authenticator-Codes; der Benutzername muss übereinstimmen. Für direkte Anmeldedaten die rbw-Integration leer lassen. Leere direkte Geheimnisfelder behalten gespeicherte Werte.",
         "data": {
           "company_id": "Firmenkennung",
           "username": "Benutzerkennung",
           "rbw_entry_id": "rbw-Integration (optional)",
-          "rbw_item_id": "rbw-Eintrags-ID des Mitarbeiterkontos (optional)",
           "password": "Passwort",
           "totp_uri": "TOTP-URI (optional)",
           "clear_totp": "Gespeicherte TOTP-URI entfernen",
           "code": "Authenticator-Code (optional)"
+        }
+      },
+      "rbw_item": {
+        "title": "rbw-Eintrag auswählen",
+        "description": "Hier stehen die Tresor-Einträge, die diese Integration laut rbw lesen darf. Weitere gibst du in den Optionen der rbw-Integration frei. Du kannst hier auch eine Eintrags-ID eingeben: rbw fragt dann unter Reparaturen nach der Freigabe.",
+        "data": {
+          "rbw_item_id": "Tresor-Eintrag"
         }
       }
     },
@@ -61,7 +67,7 @@
       "unknown": "Ein unerwarteter Fehler ist aufgetreten.",
       "invalid_totp": "Ungültige TOTP-URI. Verwende otpauth://totp/... mit einem Base32-Geheimnis und sechs Stellen.",
       "login_timeout": "Die HR-WORKS-Anmeldung hat keinen bekannten Anmeldeschritt rechtzeitig erreicht. Versuche es später erneut; prüfe das Portal im Browser, falls es weiter auftritt.",
-      "rbw_incomplete": "Wähle rbw-Integration und Eintrags-ID oder lasse beide Felder für direkte Anmeldedaten leer.",
+      "rbw_incomplete": "Wähle einen rbw-Eintrag oder lasse die rbw-Integration für direkte Anmeldedaten leer.",
       "rbw_unavailable": "Das gewählte rbw-Konto konnte nicht gelesen werden. Entsperre den Tresor und prüfe die Berechtigungen für Eintrag und Felder."
     },
     "abort": {

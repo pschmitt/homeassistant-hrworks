@@ -9,6 +9,7 @@ from homeassistant import data_entry_flow
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.const import CONF_NAME, CONF_PASSWORD, CONF_SCAN_INTERVAL, CONF_USERNAME
 from homeassistant.core import callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.selector import (
@@ -18,6 +19,10 @@ from homeassistant.helpers.selector import (
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
+    SelectOptionDict,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
     TextSelector,
     TextSelectorConfig,
     TextSelectorType,
@@ -106,6 +111,46 @@ def integration_picker(domain: str) -> ConfigEntrySelector:
     return ConfigEntrySelector(ConfigEntrySelectorConfig(integration=domain))
 
 
+async def rbw_item_options(hass: Any, entry_id: str, saved: str | None) -> list[SelectOptionDict]:
+    """The items rbw lets this integration read, by name, and the saved item.
+
+    rbw lists nothing for a new integration, and the form then takes a typed ID,
+    which rbw offers to allow through a repair.
+    """
+    try:
+        from custom_components.rbw import async_list_items
+
+        items = await async_list_items(hass, entry_id)
+    except (ImportError, HomeAssistantError):
+        items = []
+    # The name is missing while the vault is locked.
+    names = {item["id"]: item.get("name") or item["id"] for item in items}
+    if saved:
+        names.setdefault(saved, saved)
+    return [
+        SelectOptionDict(value=item_id, label=name)
+        for item_id, name in sorted(names.items(), key=lambda pair: pair[1].casefold())
+    ]
+
+
+def rbw_item_schema(options: list[SelectOptionDict], saved: str | None) -> vol.Schema:
+    """Pick an item by name, or type an ID that is not listed."""
+    default = saved or (options[0]["value"] if len(options) == 1 else None)
+    return vol.Schema(
+        {
+            (
+                vol.Required(CONF_RBW_ITEM_ID, default=default)
+                if default
+                else vol.Required(CONF_RBW_ITEM_ID)
+            ): SelectSelector(
+                SelectSelectorConfig(
+                    options=options, custom_value=True, mode=SelectSelectorMode.DROPDOWN
+                )
+            )
+        }
+    )
+
+
 def account_schema(defaults: dict, *, existing: bool = False, hass=None) -> vol.Schema:
     direct = {"field": CONF_RBW_ENTRY_ID, "operator": "not_exists"}
     password = data_entry_flow.Optional(CONF_PASSWORD, visible=direct)
@@ -126,11 +171,6 @@ def account_schema(defaults: dict, *, existing: bool = False, hass=None) -> vol.
             vol.Required(CONF_USERNAME, default=defaults.get(CONF_USERNAME, "")): TextSelector(),
             password: PASSWORD,
             **vault,
-            data_entry_flow.Optional(
-                CONF_RBW_ITEM_ID,
-                default=defaults.get(CONF_RBW_ITEM_ID, ""),
-                visible={"field": CONF_RBW_ENTRY_ID, "operator": "exists"},
-            ): TextSelector(),
             data_entry_flow.Optional(CONF_TOTP_URI, visible=direct): PASSWORD,
             data_entry_flow.Optional(CONF_CODE, visible=direct): PASSWORD,
             **(
@@ -162,6 +202,7 @@ class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
         self._client = None
         self._entry: ConfigEntry | None = None
         self._mfa_pending = False
+        self._account_input: dict = {}
 
     @staticmethod
     @callback
@@ -239,6 +280,9 @@ class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             if not user_input.get(CONF_RBW_ENTRY_ID):
                 user_input = {**user_input, CONF_RBW_ENTRY_ID: "", CONF_RBW_ITEM_ID: ""}
+            elif CONF_RBW_ITEM_ID not in user_input and not self._mfa_pending:
+                self._account_input = user_input
+                return await self.async_step_rbw_item()
             if self._mfa_pending:
                 try:
                     self._data = await complete_mfa(
@@ -337,6 +381,17 @@ class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
             ),
             errors=errors,
         )
+
+    async def async_step_rbw_item(self, user_input: dict | None = None) -> ConfigFlowResult:
+        """Choose the item once the rbw integration is known."""
+        if user_input is not None:
+            return await self.async_step_account({**self._account_input, **user_input})
+        vault = self._account_input[CONF_RBW_ENTRY_ID]
+        saved = (
+            self._data.get(CONF_RBW_ITEM_ID) if self._data.get(CONF_RBW_ENTRY_ID) == vault else None
+        )
+        options = await rbw_item_options(self.hass, vault, saved)
+        return self.async_show_form(step_id="rbw_item", data_schema=rbw_item_schema(options, saved))
 
     async def _finish(self) -> ConfigFlowResult:
         """Keep one-time codes out of config entries."""
