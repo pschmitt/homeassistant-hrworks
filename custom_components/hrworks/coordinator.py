@@ -26,13 +26,18 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
 )
+from .hrworks.browser_daemon import TAB_GONE
 from .totp import InvalidTotp
 from .workdays import days_to_read, overview, prune
 
 LOGGER = logging.getLogger(__name__)
 TRANSIENT_ERRORS = {"browser_unavailable", "cannot_connect"}
 TRANSIENT_RETRY_DELAYS = (3, 6, 10)
-AUTO_RELOAD_COOLDOWN = 300
+# After a rejected automatic login: seconds until the next attempt. Keeps retrying without
+# hammering the account, so a temporary rejection heals itself.
+AUTH_RETRY_BACKOFF = (900, 3600, 21600)
+# Failed refreshes before an outage of browser-daemon is worth a repair.
+OUTAGE_REPAIR_AFTER = 10
 RETRY_INTERVAL = timedelta(seconds=60)
 DAY_READS_TIMEOUT = 120
 LOGIN_RETRY_DELAYS = (60, 300, 900, 1800)
@@ -106,6 +111,22 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
         )
 
     @property
+    def _auth_recovery_blocked(self) -> bool:
+        """Whether automatic logins wait, after a rejected one."""
+        return time.monotonic() < getattr(self, "_auth_blocked_until", 0.0)
+
+    @_auth_recovery_blocked.setter
+    def _auth_recovery_blocked(self, blocked: bool) -> None:
+        if not blocked:
+            self._auth_blocked_until = 0.0
+            self._auth_block_count = 0
+            return
+        count = getattr(self, "_auth_block_count", 0)
+        delay = AUTH_RETRY_BACKOFF[min(count, len(AUTH_RETRY_BACKOFF) - 1)]
+        self._auth_blocked_until = time.monotonic() + delay
+        self._auth_block_count = count + 1
+
+    @property
     def next_update(self) -> datetime | None:
         if self.last_finished is None or self.update_interval is None:
             return None
@@ -165,8 +186,9 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
                         attempt + 2,
                         len(TRANSIENT_RETRY_DELAYS) + 1,
                     )
-                    # Backoff gives a restarting browser daemon time to return.
-                    if err.code == "browser_unavailable":
+                    # Backoff gives a restarting browser daemon time to return. Only a stuck
+                    # browser is stopped, not a healthy one the daemon could not reach or place.
+                    if err.code == "browser_unavailable" and err.stage == "browser_operation":
                         await self._async_recover_browser_session()
                     await asyncio.sleep(delay)
         except WorkerError as err:
@@ -204,25 +226,9 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
                 else (err.code if err.code == "worker_auth" else "worker_unavailable")
             )
             if key == "worker_unavailable" and err.code in TRANSIENT_ERRORS:
-                domain_data = getattr(self.hass, "data", None)
-                reloads = (
-                    domain_data.setdefault(DOMAIN, {})
-                    if isinstance(domain_data, dict)
-                    else getattr(self, "_reloads", {})
-                )
-                self._reloads = reloads
-                entry_id = getattr(self.entry, "entry_id", "default")
-                reload_key = f"{entry_id}_last_auto_reload"
-                last_reload = reloads.get(reload_key)
-                now = time.monotonic()
-                if last_reload is None or (now - last_reload > AUTO_RELOAD_COOLDOWN):
-                    reloads[reload_key] = now
-                    LOGGER.warning(
-                        "HR WORKS worker unavailable (%s); scheduling automatic integration reload to recover",
-                        err.code,
-                    )
-                    self.hass.config_entries.async_schedule_reload(entry_id)
-                else:
+                # An outage heals itself once browser-daemon is back: only a long one needs
+                # attention. consecutive_failures does not count this failure yet.
+                if self.consecutive_failures + 1 >= OUTAGE_REPAIR_AFTER:
                     create_issue(self.hass, self.entry, key)
             else:
                 create_issue(self.hass, self.entry, key)
@@ -233,12 +239,6 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
         self._auth_recovery_blocked = False
         self.consecutive_failures = 0
         self.update_interval = self._normal_update_interval
-        entry_id = getattr(self.entry, "entry_id", "default")
-        domain_data = getattr(self.hass, "data", None)
-        if isinstance(domain_data, dict) and DOMAIN in domain_data:
-            domain_data[DOMAIN].pop(f"{entry_id}_last_auto_reload", None)
-        if hasattr(self, "_reloads"):
-            self._reloads.pop(f"{entry_id}_last_auto_reload", None)
         clear_issues(self.hass, self.entry)
         data["work_days"] = await self._work_days(data)
         if store := getattr(self, "_snapshot_store", None):
@@ -270,7 +270,15 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
     async def _snapshot_with_auth(self, payload: dict) -> dict:
         """Recover an expired login, retrying only timed-out portal logins."""
         try:
-            return await self.client.snapshot(payload)
+            try:
+                return await self.client.snapshot(payload)
+            except WorkerError as err:
+                if err.detail != TAB_GONE:
+                    raise
+                # The browser went away, for example with a restart of browser-daemon. The
+                # profile's cookies usually still hold the login: no need for a new one.
+                LOGGER.debug("HR WORKS browser tab is gone; retrying in a new one")
+                return await self.client.snapshot(payload)
         except WorkerError as err:
             if err.code not in {"session_expired", "mfa_required"}:
                 raise

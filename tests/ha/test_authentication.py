@@ -16,7 +16,12 @@ from custom_components.hrworks.config_flow import (
     account_schema,
     connection_schema,
 )
-from custom_components.hrworks.coordinator import HrworksCoordinator
+from custom_components.hrworks.coordinator import (
+    AUTH_RETRY_BACKOFF,
+    OUTAGE_REPAIR_AFTER,
+    TAB_GONE,
+    HrworksCoordinator,
+)
 from custom_components.hrworks.repairs import EmployeeLoginRepair, WorkerUnavailableRepair
 from custom_components.hrworks.totp import InvalidTotp
 
@@ -438,7 +443,7 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(coordinator.update_interval, timedelta(minutes=15))
             clear.assert_called_once()
 
-    async def test_persistent_failure_shortens_polling_and_success_restores_it(self):
+    async def test_an_outage_retries_quietly_and_only_a_long_one_raises_a_repair(self):
         coordinator = self.coordinator()
         coordinator.client.snapshot.side_effect = WorkerError("browser_unavailable")
         with patch("custom_components.hrworks.coordinator.create_issue") as issue:
@@ -446,14 +451,16 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
                 await coordinator._async_update_data()
         self.assertEqual(coordinator.client.snapshot.await_count, 4)
         self.assertEqual(coordinator.update_interval, timedelta(seconds=60))
-        coordinator.hass.config_entries.async_schedule_reload.assert_called_once()
+        # It never reloads itself, and a short outage needs nobody's attention.
+        coordinator.hass.config_entries.async_schedule_reload.assert_not_called()
         issue.assert_not_called()
 
-        # While within cooldown, subsequent failure raises the worker_unavailable repair issue
+        coordinator.consecutive_failures = OUTAGE_REPAIR_AFTER - 1
         with patch("custom_components.hrworks.coordinator.create_issue") as issue:
             with self.assertRaises(UpdateFailed):
                 await coordinator._async_update_data()
         self.assertEqual(issue.call_args.args[-1], "worker_unavailable")
+        coordinator.hass.config_entries.async_schedule_reload.assert_not_called()
 
         coordinator.client.snapshot.side_effect = None
         coordinator.client.snapshot.return_value = {"metrics": {}}
@@ -462,6 +469,57 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(coordinator.update_interval, timedelta(minutes=15))
         self.assertIsNone(coordinator.last_error)
         clear.assert_called_once()
+
+    async def test_only_a_stuck_browser_is_stopped(self):
+        for stage, stops in (("browser_connect", False), ("browser_operation", True)):
+            coordinator = self.coordinator()
+            coordinator._async_recover_browser_session = AsyncMock()
+            coordinator.client.snapshot.side_effect = [
+                WorkerError("browser_unavailable", stage=stage),
+                {"metrics": {}},
+            ]
+            with patch("custom_components.hrworks.coordinator.clear_issues"):
+                await coordinator._async_update_data()
+            self.assertEqual(coordinator._async_recover_browser_session.await_count, int(stops))
+
+    async def test_a_lost_tab_keeps_the_login(self):
+        coordinator = self.coordinator()
+        coordinator.client.snapshot.side_effect = [
+            WorkerError("session_expired", detail=TAB_GONE),
+            {"metrics": {}},
+        ]
+        with patch("custom_components.hrworks.coordinator.clear_issues"):
+            await coordinator._async_update_data()
+        coordinator.client.login.assert_not_awaited()
+
+    async def test_a_lost_tab_and_an_expired_login_signs_in(self):
+        coordinator = self.coordinator()
+        coordinator.client.snapshot.side_effect = [
+            WorkerError("session_expired", detail=TAB_GONE),
+            WorkerError("session_expired"),
+            {"metrics": {}},
+        ]
+        with patch("custom_components.hrworks.coordinator.clear_issues"):
+            await coordinator._async_update_data()
+        coordinator.client.login.assert_awaited_once()
+
+    async def test_a_rejected_login_is_retried_later_with_growing_pauses(self):
+        coordinator = self.coordinator()
+        clock = [1000.0]
+        with patch("custom_components.hrworks.coordinator.time.monotonic", lambda: clock[0]):
+            for pause in AUTH_RETRY_BACKOFF + (AUTH_RETRY_BACKOFF[-1],):
+                coordinator._auth_recovery_blocked = True
+                self.assertTrue(coordinator._auth_recovery_blocked)
+                clock[0] += pause - 1
+                self.assertTrue(coordinator._auth_recovery_blocked)
+                clock[0] += 1
+                self.assertFalse(coordinator._auth_recovery_blocked)
+            coordinator._auth_recovery_blocked = True
+            coordinator._auth_recovery_blocked = False
+            self.assertFalse(coordinator._auth_recovery_blocked)
+            coordinator._auth_recovery_blocked = True
+            clock[0] += AUTH_RETRY_BACKOFF[0]
+            self.assertFalse(coordinator._auth_recovery_blocked)
 
     async def test_replacement_worker_can_reauthenticate(self):
         coordinator = self.coordinator()

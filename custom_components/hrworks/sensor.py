@@ -346,6 +346,7 @@ class HrworksSensor(HrworksEntity, SensorEntity):
                 "http_403": "The browser endpoint denied the connection",
                 "http_429": "The browser endpoint rate limited the connection",
                 "http_5xx": "The browser endpoint returned a server error",
+                "tab_gone": "The browser or its tab went away, for example with a restart.",
                 "timeout": "The operation timed out",
                 "connection_failed": "The browser connection failed without an HTTP status",
             }

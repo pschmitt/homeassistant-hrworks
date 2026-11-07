@@ -77,7 +77,7 @@ SOURCES = {name: _read(name) for name in OPERATIONS}
 def script(operation: str) -> str:
     """One function expression: the shared helpers, then the operation called with them."""
     return (
-        f"async (ctx) => {{\n{_read('helpers')}\nconst operation = {_read(operation)};\n"
+        f"async (ctx) => {{\n{HELPERS}\nconst operation = {SOURCES[operation]};\n"
         "return await operation(ctx, H);\n}"
     )
 
@@ -99,8 +99,8 @@ def _failure(err: Exception) -> tuple[str, bool, str | None, str | None]:
             if code == "login_timeout":
                 return code, False, "browser_operation", "timeout"
             return code, False, None, None
-        if "not found in the session" in message:  # the tab of a pending login is gone
-            return "session_expired", False, None, None
+        if "not found in the session" in message:  # the browser or its tab is gone, not the login
+            return "session_expired", False, None, TAB_GONE
         if message.startswith(SCRIPT_BUGS):
             return "portal_changed", True, None, None
         detail = "timeout" if "Timeout" in message else None
@@ -116,6 +116,9 @@ def _failure(err: Exception) -> tuple[str, bool, str | None, str | None]:
         return "cannot_connect", True, "browser_connect", detail
     detail = "http_429" if status == 429 else "http_5xx" if status >= 500 else None
     return "browser_unavailable", True, "browser_connect", detail
+
+
+TAB_GONE = "tab_gone"
 
 
 class BrowserDaemonClient:

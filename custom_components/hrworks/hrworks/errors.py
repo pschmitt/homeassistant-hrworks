@@ -27,6 +27,7 @@ ERROR_DETAILS = {
     "http_403",
     "http_429",
     "http_5xx",
+    "tab_gone",
     "timeout",
 }
 
