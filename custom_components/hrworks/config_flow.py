@@ -52,11 +52,8 @@ from .setup_form import (
     browser_daemon_fields,
     clear_rbw_when_empty,
     flatten_sections,
-    needs_rbw_item,
-    rbw_field,
+    rbw_fields,
     rbw_item_options,
-    rbw_item_schema,
-    saved_rbw_item,
     section,
 )
 from .totp import InvalidTotp
@@ -74,11 +71,11 @@ CONNECTION_FIELDS = (
 SECRET_FIELDS = (CONF_PASSWORD, CONF_TOTP_URI, CONF_CODE, CONF_BD_SECRET)
 
 
-def credential_fields(defaults: dict, hass) -> dict:
+def credential_fields(defaults: dict, hass, items: list | None = None) -> dict:
     """Credentials from rbw, or a password and TOTP URI when no rbw integration is chosen."""
     direct = {"field": CONF_RBW_ENTRY_ID, "operator": "not_exists"}
     return {
-        **rbw_field(hass, defaults),
+        **rbw_fields(hass, defaults, items or []),
         data_entry_flow.Optional(CONF_PASSWORD, visible=direct): PASSWORD,
         data_entry_flow.Optional(CONF_TOTP_URI, visible=direct): PASSWORD,
         data_entry_flow.Optional(CONF_CODE, visible=direct): PASSWORD,
@@ -94,16 +91,17 @@ def credential_fields(defaults: dict, hass) -> dict:
     }
 
 
-def setup_schema(defaults: dict, hass) -> vol.Schema:
+def setup_schema(defaults: dict, hass, items: list | None = None) -> vol.Schema:
     return vol.Schema(
         {
             vol.Optional(CONF_NAME, default=defaults.get(CONF_NAME, "HR WORKS")): TextSelector(),
             vol.Required(CONF_COMPANY, default=defaults.get(CONF_COMPANY, "")): TextSelector(),
             vol.Required(CONF_USERNAME, default=defaults.get(CONF_USERNAME, "")): TextSelector(),
-            vol.Required(SECTION_BROWSER_DAEMON): section(
-                browser_daemon_fields(hass, defaults, profile="ha-hrworks")
+            **section(
+                SECTION_BROWSER_DAEMON,
+                browser_daemon_fields(hass, defaults, profile="ha-hrworks"),
             ),
-            vol.Required(SECTION_CREDENTIALS): section(credential_fields(defaults, hass)),
+            **section(SECTION_CREDENTIALS, credential_fields(defaults, hass, items)),
         }
     )
 
@@ -113,7 +111,7 @@ def mfa_schema() -> vol.Schema:
 
 
 class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
-    """One form: the employee, Browser Daemon and credentials. Then the rbw item, if any."""
+    """One form: the employee, Browser Daemon and credentials."""
 
     VERSION = 2
     MINOR_VERSION = 1
@@ -124,7 +122,6 @@ class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
         self._client = None
         self._entry: ConfigEntry | None = None
         self._mfa_pending = False
-        self._account_input: dict = {}
         self._form_values: dict = {}
         self._step = "user"
 
@@ -155,24 +152,21 @@ class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
     async def _setup_step(self, step: str, user_input: dict | None) -> ConfigFlowResult:
         self._step = step
         if user_input is None:
-            return self._show_form({})
+            return await self._show_form({})
         submitted = flatten_sections(user_input)
         self._form_values = {
             key: value for key, value in submitted.items() if key not in SECRET_FIELDS
         }
-        if not self._mfa_pending:
-            if needs_rbw_item(submitted):
-                self._account_input = submitted
-                return await self.async_step_rbw_item()
-            if errors := await self._connect(submitted):
-                return self._show_form(errors)
+        if not self._mfa_pending and (errors := await self._connect(submitted)):
+            return await self._show_form(errors)
         return await self._login(submitted)
 
-    def _show_form(self, errors: dict) -> ConfigFlowResult:
+    async def _show_form(self, errors: dict) -> ConfigFlowResult:
+        defaults = {**self._data, CONF_NAME: self._title, **self._form_values}
         return self.async_show_form(
             step_id=self._step,
             data_schema=setup_schema(
-                {**self._data, CONF_NAME: self._title, **self._form_values}, self.hass
+                defaults, self.hass, await rbw_item_options(self.hass, defaults)
             ),
             errors=errors,
         )
@@ -311,16 +305,7 @@ class HrworksConfigFlow(ConfigFlow, domain=DOMAIN):
                                 return await self._finish()
                     else:
                         return await self._finish()
-        return self._show_form(errors)
-
-    async def async_step_rbw_item(self, user_input: dict | None = None) -> ConfigFlowResult:
-        """Choose the item once the rbw integration is known."""
-        if user_input is not None:
-            return await self._setup_step(self._step, {**self._account_input, **user_input})
-        vault = self._account_input[CONF_RBW_ENTRY_ID]
-        saved = saved_rbw_item(self._data, vault)
-        options = await rbw_item_options(self.hass, vault, saved)
-        return self.async_show_form(step_id="rbw_item", data_schema=rbw_item_schema(options, saved))
+        return await self._show_form(errors)
 
     async def _finish(self) -> ConfigFlowResult:
         """Keep one-time codes out of config entries."""

@@ -13,7 +13,7 @@
         "sections": {
           "browser_daemon": {
             "name": "Browser Daemon",
-            "description": "Führt den Browser aus. Braucht die Browser-Daemon-Integration oder die eigene URL.",
+            "description": "Führt den Browser aus. Braucht die Browser-Daemon-Integration oder eine eigene URL.",
             "data": {
               "browser_daemon_entry_id": "Browser-Daemon-Integration",
               "browser_daemon_override": "Eigene URL und Cluster-Secret verwenden",
@@ -25,13 +25,18 @@
           },
           "credentials": {
             "name": "Anmeldedaten",
-            "description": "rbw liefert Passwort und Authenticator-Codes; der Benutzername muss übereinstimmen. Ohne rbw gibst du sie hier ein. Leere Geheimnisfelder behalten gespeicherte Werte. rbw braucht die rbw-Integration.",
+            "description": "rbw liefert Passwort und Authenticator-Codes; der Benutzername muss übereinstimmen. Leere Geheimnisfelder behalten gespeicherte Werte.",
             "data": {
               "rbw_entry_id": "rbw-Integration",
+              "rbw_item_id": "Tresor-Eintrag",
               "password": "Passwort",
               "totp_uri": "TOTP-URI (optional)",
               "clear_totp": "Gespeicherte TOTP-URI entfernen",
               "code": "Authenticator-Code (optional)"
+            },
+            "data_description": {
+              "rbw_entry_id": "Leer lassen, um stattdessen unten ein festes Passwort und eine TOTP-URI einzugeben. rbw braucht die rbw-Integration.",
+              "rbw_item_id": "Zeigt, was diese Integration laut rbw lesen darf. Weitere gibst du in den Optionen der rbw-Integration frei, oder du gibst eine Eintrags-ID ein und bestätigst sie unter Reparaturen."
             }
           }
         }
@@ -47,7 +52,7 @@
         "sections": {
           "browser_daemon": {
             "name": "Browser Daemon",
-            "description": "Führt den Browser aus. Braucht die Browser-Daemon-Integration oder die eigene URL.",
+            "description": "Führt den Browser aus. Braucht die Browser-Daemon-Integration oder eine eigene URL.",
             "data": {
               "browser_daemon_entry_id": "Browser-Daemon-Integration",
               "browser_daemon_override": "Eigene URL und Cluster-Secret verwenden",
@@ -59,13 +64,18 @@
           },
           "credentials": {
             "name": "Anmeldedaten",
-            "description": "rbw liefert Passwort und Authenticator-Codes; der Benutzername muss übereinstimmen. Ohne rbw gibst du sie hier ein. Leere Geheimnisfelder behalten gespeicherte Werte. rbw braucht die rbw-Integration.",
+            "description": "rbw liefert Passwort und Authenticator-Codes; der Benutzername muss übereinstimmen. Leere Geheimnisfelder behalten gespeicherte Werte.",
             "data": {
               "rbw_entry_id": "rbw-Integration",
+              "rbw_item_id": "Tresor-Eintrag",
               "password": "Passwort",
               "totp_uri": "TOTP-URI (optional)",
               "clear_totp": "Gespeicherte TOTP-URI entfernen",
               "code": "Authenticator-Code (optional)"
+            },
+            "data_description": {
+              "rbw_entry_id": "Leer lassen, um stattdessen unten ein festes Passwort und eine TOTP-URI einzugeben. rbw braucht die rbw-Integration.",
+              "rbw_item_id": "Zeigt, was diese Integration laut rbw lesen darf. Weitere gibst du in den Optionen der rbw-Integration frei, oder du gibst eine Eintrags-ID ein und bestätigst sie unter Reparaturen."
             }
           }
         }
@@ -81,7 +91,7 @@
         "sections": {
           "browser_daemon": {
             "name": "Browser Daemon",
-            "description": "Führt den Browser aus. Braucht die Browser-Daemon-Integration oder die eigene URL.",
+            "description": "Führt den Browser aus. Braucht die Browser-Daemon-Integration oder eine eigene URL.",
             "data": {
               "browser_daemon_entry_id": "Browser-Daemon-Integration",
               "browser_daemon_override": "Eigene URL und Cluster-Secret verwenden",
@@ -93,22 +103,20 @@
           },
           "credentials": {
             "name": "Anmeldedaten",
-            "description": "rbw liefert Passwort und Authenticator-Codes; der Benutzername muss übereinstimmen. Ohne rbw gibst du sie hier ein. Leere Geheimnisfelder behalten gespeicherte Werte. rbw braucht die rbw-Integration.",
+            "description": "rbw liefert Passwort und Authenticator-Codes; der Benutzername muss übereinstimmen. Leere Geheimnisfelder behalten gespeicherte Werte.",
             "data": {
               "rbw_entry_id": "rbw-Integration",
+              "rbw_item_id": "Tresor-Eintrag",
               "password": "Passwort",
               "totp_uri": "TOTP-URI (optional)",
               "clear_totp": "Gespeicherte TOTP-URI entfernen",
               "code": "Authenticator-Code (optional)"
+            },
+            "data_description": {
+              "rbw_entry_id": "Leer lassen, um stattdessen unten ein festes Passwort und eine TOTP-URI einzugeben. rbw braucht die rbw-Integration.",
+              "rbw_item_id": "Zeigt, was diese Integration laut rbw lesen darf. Weitere gibst du in den Optionen der rbw-Integration frei, oder du gibst eine Eintrags-ID ein und bestätigst sie unter Reparaturen."
             }
           }
-        }
-      },
-      "rbw_item": {
-        "title": "rbw-Eintrag auswählen",
-        "description": "Hier stehen die Tresor-Einträge, die diese Integration laut rbw lesen darf. Weitere gibst du in den Optionen der rbw-Integration frei. Du kannst hier auch eine Eintrags-ID eingeben: rbw fragt dann unter Reparaturen nach der Freigabe.",
-        "data": {
-          "rbw_item_id": "Tresor-Eintrag"
         }
       }
     },

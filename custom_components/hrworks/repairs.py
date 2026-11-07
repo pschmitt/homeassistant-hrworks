@@ -76,7 +76,7 @@ class EmployeeLoginRepair(RepairsFlow):
         fields = {
             key: value
             for key, value in credential_fields(entry.data, self.hass).items()
-            if str(key) != "rbw_entry_id"
+            if str(key) not in {"rbw_entry_id", "rbw_item_id"}
         }
         if entry.data.get("rbw_entry_id"):
             fields = {}

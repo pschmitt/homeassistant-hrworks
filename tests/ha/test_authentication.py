@@ -24,7 +24,7 @@ from custom_components.hrworks.coordinator import (
     HrworksCoordinator,
 )
 from custom_components.hrworks.repairs import EmployeeLoginRepair, WorkerUnavailableRepair
-from custom_components.hrworks.setup_form import browser_daemon_fields
+from custom_components.hrworks.setup_form import browser_daemon_fields, rbw_item_options
 from custom_components.hrworks.totp import InvalidTotp
 
 URI = "otpauth://totp/Example:test?secret=JBSWY3DPEHPK3PXP"
@@ -67,10 +67,12 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
 
     def test_account_fields_depend_on_vault_selection(self):
         markers = {key.schema: key for key in credential_fields({}, MagicMock())}
+        self.assertEqual(
+            markers["rbw_item_id"].visible, {"field": "rbw_entry_id", "operator": "exists"}
+        )
         direct = {"field": "rbw_entry_id", "operator": "not_exists"}
         self.assertEqual(markers["password"].visible, direct)
         self.assertEqual(markers["totp_uri"].visible, direct)
-        self.assertNotIn("rbw_item_id", markers)
 
     def test_vault_picker_only_suggests_a_saved_vault(self):
         hass = MagicMock()
@@ -172,9 +174,11 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(direct["code"], "123456")
         self.assertNotIn("rbw_entry_id", direct)
 
-    async def test_item_step_lists_names_and_continues_the_login(self):
+    async def test_form_lists_items_by_name_next_to_the_rbw_picker(self):
         flow = self.flow("user", data=dict(DATA))
-        flow._client.login.return_value = {"profile_id": "b" * 64, "authenticated": True}
+        flow.hass.config_entries.async_entries.return_value = [
+            SimpleNamespace(entry_id="vault", title="Vault", disabled_by=None)
+        ]
         listed = AsyncMock(
             return_value=[
                 {"id": "b-id", "name": "zeta", "fields": []},
@@ -185,57 +189,63 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
         with patch.dict(
             sys.modules, {"custom_components.rbw": SimpleNamespace(async_list_items=listed)}
         ):
-            form = await flow.async_step_user({**DATA, "rbw_entry_id": "vault"})
-        self.assertEqual(form["step_id"], "rbw_item")
-        flow._client.login.assert_not_awaited()
-        selector = next(iter(form["data_schema"].schema.values()))
+            form = await flow.async_step_user()
+        listed.assert_awaited_once_with(flow.hass, "vault")
+        credentials = next(
+            value for key, value in form["data_schema"].schema.items() if str(key) == "credentials"
+        ).schema.schema
+        marker = next(key for key in credentials if str(key) == "rbw_item_id")
+        self.assertEqual(marker.visible, {"field": "rbw_entry_id", "operator": "exists"})
         self.assertEqual(
-            [(option["value"], option["label"]) for option in selector.config["options"]],
+            [
+                (option["value"], option["label"])
+                for option in credentials[marker].config["options"]
+            ],
             [("a-id", "Alpha"), ("locked-id", "locked-id"), ("b-id", "zeta")],
         )
-        self.assertTrue(selector.config["custom_value"])
-        with patch(
-            "custom_components.hrworks.config_flow.credentials",
-            AsyncMock(
-                return_value={
-                    "username": "employee",
-                    "password": "test-password",
-                    "company_id": "example",
-                }
-            ),
+        self.assertTrue(credentials[marker].config["custom_value"])
+
+    async def test_item_field_preselects_the_saved_or_only_item(self):
+        hass = MagicMock()
+        hass.config_entries.async_entries.return_value = [SimpleNamespace(entry_id="vault")]
+        only = [{"value": "only", "label": "Only"}]
+        for defaults, items, expected in (
+            ({"rbw_item_id": "saved"}, only, "saved"),
+            ({}, only, "only"),
+            ({}, [*only, {"value": "other", "label": "Other"}], None),
         ):
-            flow._connect = AsyncMock(return_value={})
-            result = await flow.async_step_rbw_item({"rbw_item_id": "a-id"})
-        self.assertEqual(result["type"], "done")
-        self.assertEqual(flow._data["rbw_entry_id"], "vault")
-        self.assertEqual(flow._data["rbw_item_id"], "a-id")
+            with self.subTest(defaults=defaults, items=items):
+                fields = credential_fields(defaults, hass, items)
+                marker = next(key for key in fields if str(key) == "rbw_item_id")
+                self.assertEqual(marker.description, {"suggested_value": expected})
 
-    async def test_item_step_preselects_only_the_item_of_the_same_vault(self):
-        for chosen, expected in (("old-vault", "old-item"), ("new-vault", "only")):
-            with self.subTest(chosen=chosen):
-                flow = self.flow(
-                    "reconfigure",
-                    data={**DATA, "rbw_entry_id": "old-vault", "rbw_item_id": "old-item"},
-                )
-                flow._get_reconfigure_entry = lambda: flow._entry
-                listed = AsyncMock(return_value=[{"id": "only", "name": "Only", "fields": []}])
-                with patch.dict(
-                    sys.modules, {"custom_components.rbw": SimpleNamespace(async_list_items=listed)}
-                ):
-                    form = await flow.async_step_reconfigure({**DATA, "rbw_entry_id": chosen})
-                marker = next(iter(form["data_schema"].schema))
-                self.assertEqual(marker.default(), expected)
+    async def test_item_labels_name_the_integration_when_there_are_several(self):
+        hass = MagicMock()
+        hass.config_entries.async_entries.return_value = [
+            SimpleNamespace(entry_id="a", title="Home"),
+            SimpleNamespace(entry_id="b", title="Work"),
+        ]
 
-    async def test_item_step_takes_a_typed_id_when_rbw_lists_nothing(self):
-        flow = self.flow("user", data=dict(DATA))
-        unavailable = AsyncMock(side_effect=HomeAssistantError("not loaded"))
+        async def listed(_hass, entry_id):
+            if entry_id == "b":
+                raise HomeAssistantError("not loaded")
+            return [{"id": "item", "name": "Login", "fields": []}]
+
         with patch.dict(
-            sys.modules, {"custom_components.rbw": SimpleNamespace(async_list_items=unavailable)}
+            sys.modules, {"custom_components.rbw": SimpleNamespace(async_list_items=listed)}
         ):
-            form = await flow.async_step_user({**DATA, "rbw_entry_id": "vault"})
-        selector = next(iter(form["data_schema"].schema.values()))
-        self.assertEqual(selector.config["options"], [])
-        self.assertTrue(selector.config["custom_value"])
+            options = await rbw_item_options(hass, {"rbw_item_id": "saved"})
+        self.assertEqual(
+            options,
+            [{"value": "item", "label": "Login (Home)"}, {"value": "saved", "label": "saved"}],
+        )
+
+    async def test_vault_without_item_asks_for_it_before_logging_in(self):
+        flow = self.flow("user", data=dict(DATA))
+        flow._connect = AsyncMock(return_value={})
+        result = await flow.async_step_user({**DATA, "rbw_entry_id": "vault"})
+        self.assertEqual(result["errors"], {"base": "rbw_incomplete"})
+        flow._client.login.assert_not_awaited()
 
     async def test_disabling_vault_clears_hidden_old_item(self):
         for source in ("user", "reconfigure", "reauth"):

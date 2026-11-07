@@ -13,7 +13,7 @@
         "sections": {
           "browser_daemon": {
             "name": "Browser Daemon",
-            "description": "Runs the browser. Needs the Browser Daemon integration, or the override.",
+            "description": "Runs the browser. Needs the Browser Daemon integration, or a custom URL.",
             "data": {
               "browser_daemon_entry_id": "Browser Daemon integration",
               "browser_daemon_override": "Use a custom URL and cluster secret",
@@ -25,13 +25,18 @@
           },
           "credentials": {
             "name": "Credentials",
-            "description": "rbw supplies the password and authenticator codes; its username must match. Without rbw, enter them here. Blank secret fields keep saved values. Needs the rbw integration to use rbw.",
+            "description": "rbw supplies the password and authenticator codes; its username must match. Blank secret fields keep saved values.",
             "data": {
               "rbw_entry_id": "rbw integration",
+              "rbw_item_id": "Vault item",
               "password": "Password",
               "totp_uri": "TOTP URI (optional)",
               "clear_totp": "Remove saved TOTP URI",
               "code": "Authenticator code (optional)"
+            },
+            "data_description": {
+              "rbw_entry_id": "Leave empty to enter a static password and TOTP URI below instead. Using rbw needs the rbw integration.",
+              "rbw_item_id": "Lists what rbw allows this integration to read. To offer more, allow them in the rbw integration's options, or type an item ID and approve it under Repairs."
             }
           }
         }
@@ -47,7 +52,7 @@
         "sections": {
           "browser_daemon": {
             "name": "Browser Daemon",
-            "description": "Runs the browser. Needs the Browser Daemon integration, or the override.",
+            "description": "Runs the browser. Needs the Browser Daemon integration, or a custom URL.",
             "data": {
               "browser_daemon_entry_id": "Browser Daemon integration",
               "browser_daemon_override": "Use a custom URL and cluster secret",
@@ -59,13 +64,18 @@
           },
           "credentials": {
             "name": "Credentials",
-            "description": "rbw supplies the password and authenticator codes; its username must match. Without rbw, enter them here. Blank secret fields keep saved values. Needs the rbw integration to use rbw.",
+            "description": "rbw supplies the password and authenticator codes; its username must match. Blank secret fields keep saved values.",
             "data": {
               "rbw_entry_id": "rbw integration",
+              "rbw_item_id": "Vault item",
               "password": "Password",
               "totp_uri": "TOTP URI (optional)",
               "clear_totp": "Remove saved TOTP URI",
               "code": "Authenticator code (optional)"
+            },
+            "data_description": {
+              "rbw_entry_id": "Leave empty to enter a static password and TOTP URI below instead. Using rbw needs the rbw integration.",
+              "rbw_item_id": "Lists what rbw allows this integration to read. To offer more, allow them in the rbw integration's options, or type an item ID and approve it under Repairs."
             }
           }
         }
@@ -81,7 +91,7 @@
         "sections": {
           "browser_daemon": {
             "name": "Browser Daemon",
-            "description": "Runs the browser. Needs the Browser Daemon integration, or the override.",
+            "description": "Runs the browser. Needs the Browser Daemon integration, or a custom URL.",
             "data": {
               "browser_daemon_entry_id": "Browser Daemon integration",
               "browser_daemon_override": "Use a custom URL and cluster secret",
@@ -93,22 +103,20 @@
           },
           "credentials": {
             "name": "Credentials",
-            "description": "rbw supplies the password and authenticator codes; its username must match. Without rbw, enter them here. Blank secret fields keep saved values. Needs the rbw integration to use rbw.",
+            "description": "rbw supplies the password and authenticator codes; its username must match. Blank secret fields keep saved values.",
             "data": {
               "rbw_entry_id": "rbw integration",
+              "rbw_item_id": "Vault item",
               "password": "Password",
               "totp_uri": "TOTP URI (optional)",
               "clear_totp": "Remove saved TOTP URI",
               "code": "Authenticator code (optional)"
+            },
+            "data_description": {
+              "rbw_entry_id": "Leave empty to enter a static password and TOTP URI below instead. Using rbw needs the rbw integration.",
+              "rbw_item_id": "Lists what rbw allows this integration to read. To offer more, allow them in the rbw integration's options, or type an item ID and approve it under Repairs."
             }
           }
-        }
-      },
-      "rbw_item": {
-        "title": "Choose the rbw item",
-        "description": "These are the vault items rbw allows this integration to read. To offer more, allow them in the rbw integration's options. You can also enter an item ID here: rbw then asks you to allow it under Repairs.",
-        "data": {
-          "rbw_item_id": "Vault item"
         }
       }
     },

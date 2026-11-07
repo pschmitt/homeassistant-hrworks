@@ -153,7 +153,7 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(picker.config["integration"], "browser_daemon")
         self.assertEqual(markers["browser_daemon_entry_id"].default(), "bd1")
         self.assertIs(markers["browser_daemon_override"].default(), False)
-        override = [{"field": "browser_daemon_override", "value": True}]
+        override = {"field": "browser_daemon_override", "value": True}
         self.assertEqual(markers["browser_daemon_url"].visible, override)
         self.assertEqual(markers["browser_daemon_secret"].visible, override)
 
