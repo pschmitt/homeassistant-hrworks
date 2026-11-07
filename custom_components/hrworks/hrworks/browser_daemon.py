@@ -31,6 +31,7 @@ BERLIN = ZoneInfo("Europe/Berlin")
 CLIENT_NAME = "Home Assistant · HR WORKS"
 _LOGGER = logging.getLogger(__name__)
 # The integration's brand logo (absent when the library runs on its own).
+PROFILE_LABEL = "ha"
 PROFILE_ICON = Path(__file__).resolve().parents[1] / "brand" / "icon.png"
 MFA_WINDOW = timedelta(minutes=10)
 SCRIPT_DIR = Path(__file__).parent / "scripts"
@@ -290,12 +291,11 @@ class BrowserDaemonClient:
                             node=self._node,
                             json={"name": self.browser_profile, "engine": "chromium"},
                         )
-                        await self._set_profile_icon()
+                        await self._brand_profile({})
                     else:
                         if self._node is None:
                             self._node = found.get("node_name")
-                        if not found.get("icon_rev"):
-                            await self._set_profile_icon()
+                        await self._brand_profile(found)
                 else:
                     if self._session is None:
                         session = await self._client().create_session(
@@ -334,18 +334,28 @@ class BrowserDaemonClient:
                 ) from None
         return res
 
-    async def _set_profile_icon(self) -> None:
-        """Give a profile without a picture the HR WORKS logo. Never raises."""
+    async def _brand_profile(self, profile: dict) -> None:
+        """Give a profile without a picture the HR WORKS logo, and one without labels
+        the `ha` label (what the user set is kept). Never raises."""
+        name = quote(self.browser_profile or "", safe="")
         try:
-            data = await asyncio.to_thread(PROFILE_ICON.read_bytes)
-            await self._client()._request(
-                "PUT",
-                f"/api/profiles/{quote(self.browser_profile or '', safe='')}/icon",
-                node=self._node,
-                data=aiohttp.BytesPayload(data, content_type="image/png"),
-            )
+            if not profile.get("icon_rev"):
+                data = await asyncio.to_thread(PROFILE_ICON.read_bytes)
+                await self._client()._request(
+                    "PUT",
+                    f"/api/profiles/{name}/icon",
+                    node=self._node,
+                    data=aiohttp.BytesPayload(data, content_type="image/png"),
+                )
+            if not profile.get("labels"):
+                await self._client()._json(
+                    "PATCH",
+                    f"/api/profiles/{name}",
+                    node=self._node,
+                    json={"labels": [PROFILE_LABEL]},
+                )
         except (BrowserDaemonError, OSError):
-            _LOGGER.debug("Could not set the browser-daemon profile picture", exc_info=True)
+            _LOGGER.debug("Could not brand the browser-daemon profile", exc_info=True)
 
     def _path(self) -> str:
         if not self.profile:
