@@ -333,7 +333,7 @@ class FakeDaemon:
         pass
 
     async def find_profile(self, _name):
-        return {"session_id": "s-1"}
+        return {"session_id": "s-1", "icon_rev": "existing-icon", "labels": ["ha"]}
 
     async def tabs(self, node=None):
         return []

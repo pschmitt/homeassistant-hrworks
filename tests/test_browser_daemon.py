@@ -6,6 +6,7 @@ import subprocess
 import unittest
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock
+from unittest.mock import call as mock_call
 
 from browser_daemon_client import BrowserDaemonError, RunError, RunResult, RunTimeout
 from hrworks import browser_daemon
@@ -74,8 +75,16 @@ class FakeDaemon:
         self.close_tab = AsyncMock()
         self.create_session = AsyncMock(return_value={"id": "throwaway"})
         self.delete_session = AsyncMock()
-        self._json = AsyncMock()
-        self.find_profile = AsyncMock(return_value={"name": "hrworks", "session_id": "s-1"})
+        self._json = AsyncMock(return_value={})
+        self._request = AsyncMock()
+        self.find_profile = AsyncMock(
+            return_value={
+                "name": "hrworks",
+                "session_id": "s-1",
+                "icon_rev": "existing-icon",
+                "labels": ["ha"],
+            }
+        )
         self.tabs = AsyncMock(return_value=[])
 
     def on(self, operation, handler):
@@ -92,6 +101,27 @@ class FakeDaemon:
 
 def make(daemon, **kwargs):
     return BrowserDaemonClient({**SETTINGS, "profile_id": IDENTITY}, daemon=daemon, **kwargs)
+
+
+class ProfileBrandingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_unbranded_profile_gets_icon_and_label(self):
+        daemon = FakeDaemon()
+        client = make(daemon)
+        await client._brand_profile({})
+        daemon._request.assert_awaited_once()
+        args, kwargs = daemon._request.call_args
+        self.assertEqual(args, ("PUT", "/api/profiles/hrworks/icon"))
+        self.assertEqual(kwargs["data"].content_type, "image/png")
+        self.assertEqual(daemon._json.await_args_list[0].args, ("PATCH", "/api/profiles/hrworks"))
+        self.assertEqual(daemon._json.await_args_list[0].kwargs["json"], {"labels": ["ha"]})
+        self.assertEqual(daemon._json.await_args_list[1].args, ("GET", "/api/labels"))
+        self.assertEqual(daemon._json.await_args_list[2].args, ("PUT", "/api/labels/ha"))
+
+    async def test_existing_branding_is_preserved(self):
+        daemon = FakeDaemon()
+        await make(daemon)._brand_profile({"icon_rev": "custom-icon", "labels": ["custom"]})
+        daemon._request.assert_not_awaited()
+        daemon._json.assert_not_awaited()
 
 
 class LoginTests(unittest.IsolatedAsyncioTestCase):
@@ -140,6 +170,8 @@ class LoginTests(unittest.IsolatedAsyncioTestCase):
             "name": "hrworks",
             "session_id": "s-1",
             "node_name": "worker",
+            "icon_rev": "existing-icon",
+            "labels": ["ha"],
         }
 
         async def tabs(**kwargs):
@@ -168,11 +200,21 @@ class LoginTests(unittest.IsolatedAsyncioTestCase):
         )
         self.daemon.on("probe", ok())
         await self.client.health()
-        self.daemon._json.assert_awaited_once_with(
-            "POST",
-            "/api/profiles",
-            node=None,
-            json={"name": "ha-hrworks", "engine": "chromium"},
+        self.assertEqual(
+            self.daemon._json.await_args_list,
+            [
+                mock_call(
+                    "POST",
+                    "/api/profiles",
+                    node=None,
+                    json={"name": "ha-hrworks", "engine": "chromium"},
+                ),
+                mock_call("PATCH", "/api/profiles/ha-hrworks", node=None, json={"labels": ["ha"]}),
+                mock_call("GET", "/api/labels"),
+                mock_call(
+                    "PUT", "/api/labels/ha", json={"icon": browser_daemon.PROFILE_LABEL_ICON}
+                ),
+            ],
         )
         self.assertEqual(self.daemon.calls[0][1]["profile"], "ha-hrworks")
 

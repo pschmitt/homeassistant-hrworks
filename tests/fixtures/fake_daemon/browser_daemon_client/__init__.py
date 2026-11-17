@@ -53,6 +53,19 @@ class BrowserDaemon:
     def __init__(self, session, url, secret=None, *, client=None, timeout=30):
         self.url = url
 
+    async def _request(self, method, path, **kwargs):
+        if method != "PUT" or not path.endswith("/icon"):
+            raise AssertionError(f"Unexpected request: {method} {path}")
+
+    async def _json(self, method, path, **kwargs):
+        if method == "GET" and path == "/api/labels":
+            return {"defs": {}}
+        if method == "PATCH" and path.startswith("/api/profiles/"):
+            return {}
+        if method == "PUT" and path == "/api/labels/ha":
+            return {}
+        raise AssertionError(f"Unexpected request: {method} {path}")
+
     async def close_tab(self, page_id, node=None):
         pass
 
