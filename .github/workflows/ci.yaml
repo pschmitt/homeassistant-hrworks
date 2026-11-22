@@ -43,10 +43,7 @@ jobs:
       - run: npm test
 
   hassfest:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: home-assistant/actions/hassfest@master
+    uses: pschmitt/ci-workflows/.github/workflows/home-assistant-hassfest.yaml@main
   homeassistant:
     runs-on: ubuntu-latest
     steps:
