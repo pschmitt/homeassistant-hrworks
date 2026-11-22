@@ -223,9 +223,14 @@ async function login(page, context, { company, username, password, force }) {
     page.off('requestfailed', done);
   }
   if (page.url().includes('2fa-selection')) {
-    const authenticator = page.getByText('Authenticator', { exact: true });
-    if (!await authenticator.count()) throw new PortalError('unsupported_mfa');
-    await authenticator.click();
+    const authenticator = page.getByText(/^(?:Authenticator(?:[- ]App)?|Bitwarden 2FA)$/i);
+    try {
+      await authenticator.waitFor({ state: 'visible', timeout: LOGIN_STEP_TIMEOUT });
+    } catch (err) {
+      if (!isTimeout(err)) throw err;
+      throw new PortalError('unsupported_mfa');
+    }
+    await authenticator.click({ timeout: LOGIN_STEP_TIMEOUT });
     try {
       await page.waitForURL('**/2fa-totp', { timeout: LOGIN_STEP_TIMEOUT });
     } catch (err) {

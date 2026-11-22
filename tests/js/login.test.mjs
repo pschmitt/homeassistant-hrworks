@@ -35,10 +35,15 @@ describe('login', () => {
             return FORM("setTimeout(() => { location.href = '/2fa-totp'; }, 1800)");
           }
           return FORM(`location.href='${state.submit}'`);
-        case '/2fa-selection':
-          return html(state.factors.map(name => (name === 'Authenticator' && !state.stuckSelection
+        case '/2fa-selection': {
+          const options = state.factors.map(name => (name !== 'E-mail' && !state.stuckSelection
             ? `<button onclick="location.href='/2fa-totp'">${name}</button>`
-            : `<button>${name}</button>`)).join(''));
+            : `<button>${name}</button>`)).join('');
+          if (!state.delayedSelection) return html(options);
+          return html(`<main></main><script>setTimeout(() => {
+            document.querySelector('main').innerHTML = ${JSON.stringify(options)};
+          }, 300)</script>`);
+        }
         case '/2fa-totp':
           state.authenticated = true;
           return html(`<input><button onclick="if (document.querySelector('input').value
@@ -65,6 +70,18 @@ describe('login', () => {
   test('the factor selection chooses Authenticator', async () => {
     state.submit = '/2fa-selection';
     state.factors = ['E-mail', 'Authenticator'];
+    assert.deepEqual(await login(), { mfa_required: true });
+  });
+
+  test('waits for a delayed Authenticator option to render', async () => {
+    state.submit = '/2fa-selection';
+    state.delayedSelection = true;
+    assert.deepEqual(await login(), { mfa_required: true });
+  });
+
+  test('recognizes the Bitwarden 2FA authenticator option', async () => {
+    state.submit = '/2fa-selection';
+    state.factors = ['E-mail', 'Bitwarden 2FA'];
     assert.deepEqual(await login(), { mfa_required: true });
   });
 
