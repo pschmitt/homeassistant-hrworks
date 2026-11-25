@@ -42,6 +42,12 @@ describe('login', () => {
           }
           return FORM(`location.href='${state.submit}'`);
         case '/2fa-selection': {
+          if (state.lateHandler) {
+            // Like a portal still setting up: the first clicks do nothing.
+            return html(`<button id="a">Authenticator</button><script>setTimeout(() => {
+              document.getElementById('a').onclick = () => { location.href = '/2fa-totp'; };
+            }, 700)</script>`);
+          }
           const options = state.factors.map(name => (name !== 'E-mail' && !state.stuckSelection
             ? `<button onclick="location.href='/2fa-totp'">${name}</button>`
             : `<button>${name}</button>`)).join('');
@@ -93,6 +99,12 @@ describe('login', () => {
 
   test('follows the waiting page after the password to the factor selection', async () => {
     state.submit = `${DASHBOARD}?after=password`;
+    assert.deepEqual(await login(), { mfa_required: true });
+  });
+
+  test('clicks Authenticator again when the first click lands too early', async () => {
+    state.submit = '/2fa-selection';
+    state.lateHandler = true;
     assert.deepEqual(await login(), { mfa_required: true });
   });
 

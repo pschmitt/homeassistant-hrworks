@@ -245,19 +245,25 @@ async function login(page, context, { company, username, password, force }) {
   }
   await leaveInterstitial(page);
   if (page.url().includes('2fa-selection')) {
-    const authenticator = page.getByText(/^(?:Authenticator(?:[- ]App)?|Bitwarden 2FA)$/i);
+    await page.waitForLoadState('load', { timeout: LOGIN_STEP_TIMEOUT }).catch(() => {});
+    const authenticator = page.getByText(/^(?:Authenticator(?:[- ]App)?|Bitwarden 2FA)$/i).first();
     try {
       await authenticator.waitFor({ state: 'visible', timeout: LOGIN_STEP_TIMEOUT });
     } catch (err) {
       if (!isTimeout(err)) throw err;
       throw new PortalError('unsupported_mfa');
     }
-    await authenticator.click({ timeout: LOGIN_STEP_TIMEOUT });
-    try {
-      await page.waitForURL('**/2fa-totp', { timeout: LOGIN_STEP_TIMEOUT });
-    } catch (err) {
-      if (!isTimeout(err)) throw err;
-      throw new PortalError('login_timeout');
+    // A click that lands while the page is still setting up its handlers does nothing: click again
+    // until the code step shows (three tries, as long as the single wait was before).
+    for (let attempt = 1; ; attempt++) {
+      await authenticator.click({ timeout: LOGIN_STEP_TIMEOUT });
+      try {
+        await page.waitForURL('**/2fa-totp', { timeout: LOGIN_STEP_TIMEOUT / 3 });
+        break;
+      } catch (err) {
+        if (!isTimeout(err)) throw err;
+        if (attempt >= 3) throw new PortalError('login_timeout');
+      }
     }
   }
   if (page.url().includes('2fa-totp')) return { mfa_required: true };

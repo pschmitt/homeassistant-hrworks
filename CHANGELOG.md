@@ -13,6 +13,9 @@
   password to the second factor it then asks for. It used to take the waiting page
   for a finished login, so the next read hit the second factor and failed with
   `session_expired` or `unsupported_mfa`. The login may take up to 150 seconds.
+- The second-factor selection waits for its page to load and clicks Authenticator
+  again (three tries) when a click lands before the page reacts; a lost click used
+  to end the login with `login_timeout`.
 
 ## 9.2.0
 
