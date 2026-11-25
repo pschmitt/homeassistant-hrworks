@@ -16,6 +16,11 @@
 - The second-factor selection waits for its page to load and clicks Authenticator
   again (three tries) when a click lands before the page reacts; a lost click used
   to end the login with `login_timeout`.
+- The Authenticator option is chosen with a click from the page itself (and then a
+  forced one) when the pointer click does not reach it; the portal's option did
+  not react to the pointer click at all.
+- The login no longer takes a portal page that is still loading (empty title) for
+  the finished login.
 
 ## 9.2.0
 

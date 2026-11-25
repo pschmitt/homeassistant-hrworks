@@ -117,7 +117,8 @@ async function leaveInterstitial(page) {
     const path = new URL(page.url()).pathname;
     if (path.includes('2fa')) return;
     const title = await page.title().catch(() => '');
-    if (path !== '/' && !INTERSTITIAL.test(title)) return;
+    // An empty title is a page still loading (the waiting page too), not a portal page.
+    if (path !== '/' && title && !INTERSTITIAL.test(title)) return;
     await sleep(500);
   }
   throw new PortalError('login_timeout');
@@ -253,16 +254,22 @@ async function login(page, context, { company, username, password, force }) {
       if (!isTimeout(err)) throw err;
       throw new PortalError('unsupported_mfa');
     }
-    // A click that lands while the page is still setting up its handlers does nothing: click again
-    // until the code step shows (three tries, as long as the single wait was before).
-    for (let attempt = 1; ; attempt++) {
-      await authenticator.click({ timeout: LOGIN_STEP_TIMEOUT });
+    // Choose Authenticator until the code step shows. The portal's option did not react to a plain
+    // click (no navigation, no change at all), so the next tries click its clickable element from the
+    // page itself, which no overlay or pending actionability check can swallow, and then force a click.
+    const tries = [
+      () => authenticator.click({ timeout: LOGIN_STEP_TIMEOUT / 3 }),
+      () => authenticator.evaluate(el => (el.closest('a, button, [role=button], [onclick], label, li, .list-group-item') || el).click()),
+      () => authenticator.click({ force: true, timeout: LOGIN_STEP_TIMEOUT / 3 }),
+    ];
+    for (let attempt = 0; ; attempt++) {
+      await tries[attempt]().catch(err => { if (!isTimeout(err)) throw err; });
       try {
         await page.waitForURL('**/2fa-totp', { timeout: LOGIN_STEP_TIMEOUT / 3 });
         break;
       } catch (err) {
         if (!isTimeout(err)) throw err;
-        if (attempt >= 3) throw new PortalError('login_timeout');
+        if (attempt >= tries.length - 1) throw new PortalError('login_timeout');
       }
     }
   }

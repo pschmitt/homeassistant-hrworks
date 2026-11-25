@@ -42,6 +42,11 @@ describe('login', () => {
           }
           return FORM(`location.href='${state.submit}'`);
         case '/2fa-selection': {
+          if (state.covered) {
+            // An invisible layer over the options: a pointer click never reaches them.
+            return html(`<a href="/2fa-totp" class="list-group-item"><b>Authenticator</b><small>Bitwarden 2FA</small></a>
+              <div style="position:fixed;inset:0;background:transparent;z-index:9"></div>`);
+          }
           if (state.lateHandler) {
             // Like a portal still setting up: the first clicks do nothing.
             return html(`<button id="a">Authenticator</button><script>setTimeout(() => {
@@ -105,6 +110,12 @@ describe('login', () => {
   test('clicks Authenticator again when the first click lands too early', async () => {
     state.submit = '/2fa-selection';
     state.lateHandler = true;
+    assert.deepEqual(await login(), { mfa_required: true });
+  });
+
+  test('chooses Authenticator even when an invisible layer swallows the pointer click', async () => {
+    state.submit = '/2fa-selection';
+    state.covered = true;
     assert.deepEqual(await login(), { mfa_required: true });
   });
 
