@@ -58,7 +58,24 @@ async def complete_mfa(client, current: dict, supplied: dict, *, hass=None) -> d
     return settings
 
 
-async def authenticate(client, settings: dict, *, force: bool = False, hass=None) -> dict:
+async def authenticate(
+    client, settings: dict, *, force: bool = False, hass=None, since: float | None = None
+) -> dict:
+    """Log in (and complete MFA) once, even when several reads fail at the same time.
+
+    `since` is the time.monotonic() at which the caller's read failed: when another caller
+    logged in after that, the login is reused instead of repeated.
+    """
+    guard = getattr(type(client), "authenticating", None)
+    if guard is None:
+        return await _authenticate(client, settings, force=force, hass=hass)
+    async with client.authenticating():
+        if since is not None and client.authenticated_at > since:
+            return {"authenticated": True, "reused": True}
+        return await _authenticate(client, settings, force=force, hass=hass)
+
+
+async def _authenticate(client, settings: dict, *, force: bool = False, hass=None) -> dict:
     resolved = await credentials(hass, settings)
     result = await client.login(
         resolved["company_id"], resolved["username"], resolved["password"], force=force

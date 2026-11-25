@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Reads that fail together after an expired login now log in once: one login at
+  a time, reused by every read that failed before it, and no other operation runs
+  in the portal tab between the login and its MFA step. Concurrent calendar reads
+  used to log in over each other and expire the pending MFA (`session_expired`).
+- The calendar services no longer log in again per call once the automatic
+  recovery has given up; they ask for the repair instead.
+- The development shell provides Home Assistant, so `tests/ha` runs in it.
+
 ## 9.2.0
 
 - Days off without a working-times row read as days without target instead of

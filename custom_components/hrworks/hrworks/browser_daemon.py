@@ -11,6 +11,7 @@ args, error text) is logged: errors become fixed codes.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import logging
 import re
@@ -50,6 +51,10 @@ OPERATIONS = (
     "logout",
 )
 # Seconds a run may take, per operation .
+# Operations that belong to an employee login: they run while one is in progress, every
+# other operation waits for it (it would navigate the tab away from the pending MFA page).
+AUTH_OPERATIONS = frozenset({"login", "mfa", "logout", "probe"})
+
 TIMEOUTS = {
     "snapshot": 170,
     "record": 150,
@@ -155,6 +160,42 @@ class BrowserDaemonClient:
         self._tab: str | None = None
         self._mfa_started: float | None = None
         self._connections = 0
+        # One employee login at a time, and nothing else in the tab while it runs.
+        self._auth_lock = asyncio.Lock()
+        self._auth_idle = asyncio.Event()
+        self._auth_idle.set()
+        # time.monotonic() of the last successful login (see authenticating()).
+        self.authenticated_at = 0.0
+
+    @contextlib.asynccontextmanager
+    async def authenticating(self):
+        """Hold the login: one at a time, and no other operation runs until it ends.
+
+        Login and MFA are two operations in the same tab; a calendar read queued between
+        them would navigate away from the pending MFA page and expire the login.
+        """
+        async with self._auth_lock:
+            self._auth_idle.clear()
+            try:
+                yield
+                self.authenticated_at = time.monotonic()
+            finally:
+                self._auth_idle.set()
+
+    @contextlib.asynccontextmanager
+    async def _slot(self, operation: str):
+        """The browser lock for one operation; outside a login, wait until none is in progress."""
+        while True:
+            if operation not in AUTH_OPERATIONS:
+                await self._auth_idle.wait()
+            await self._lock.acquire()
+            if operation in AUTH_OPERATIONS or self._auth_idle.is_set():
+                break
+            self._lock.release()
+        try:
+            yield
+        finally:
+            self._lock.release()
 
     # Plumbing
 
@@ -261,7 +302,7 @@ class BrowserDaemonClient:
     ) -> Any:
         """Run one operation; raise only fixed :class:`WorkerError` codes."""
         target = {"profile": self.browser_profile} if self.browser_profile else {}
-        async with self._lock:
+        async with self._slot(operation):
             self._connections += 1
             try:
                 if self.node_group and (self.browser_profile or self._session is None):

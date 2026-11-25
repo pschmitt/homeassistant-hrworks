@@ -1,5 +1,7 @@
 """Explicit working-time actions with previews and no automatic write retries."""
 
+import time
+
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import SupportsResponse
@@ -108,12 +110,20 @@ def register_services(hass) -> None:
         coord = entry.runtime_data
         opts = {key: value for key, value in call.data.items() if key != "config_entry_id"}
         fetch = getattr(coord.client, method)
+        started = time.monotonic()
         try:
             return await fetch(opts)
         except WorkerError as err:
             if err.code == "session_expired":
+                if coord._auth_recovery_blocked:
+                    # The coordinator gave up and raised a repair: do not log in again per call.
+                    raise HomeAssistantError(
+                        "calendar_failed: reauth_required (complete the HR WORKS repair)"
+                    ) from err
                 try:
-                    await authenticate(coord.client, entry.data, force=True, hass=hass)
+                    await authenticate(
+                        coord.client, entry.data, force=True, hass=hass, since=started
+                    )
                     return await fetch(opts)
                 except Exception as rec_err:
                     raise HomeAssistantError(

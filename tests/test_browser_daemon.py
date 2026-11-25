@@ -1,5 +1,6 @@
 """The browser-daemon backend against a fake daemon: no network, no HR WORKS."""
 
+import asyncio
 import json
 import shutil
 import subprocess
@@ -799,3 +800,42 @@ class ScriptTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LoginExclusivityTests(unittest.IsolatedAsyncioTestCase):
+    """A read queued during a login must not run between the login and its MFA step."""
+
+    async def test_a_read_waits_until_login_and_mfa_are_done(self):
+        daemon = FakeDaemon()
+        client = make(daemon)
+        login_started = asyncio.Event()
+
+        def login(_kwargs):
+            login_started.set()
+            return ok({"mfa_required": True}, page="tab-1")
+
+        daemon.on("login", login)
+        daemon.on("mfa", ok({}))
+        daemon.on("team_calendar", ok({}))
+
+        async def sign_in():
+            async with client.authenticating():
+                await client._run("login", {}, keep_open=True)
+                await asyncio.sleep(0)  # give the queued read every chance to cut in
+                await client._run("mfa", {"code": "123456"})
+
+        signing_in = asyncio.create_task(sign_in())
+        await login_started.wait()
+        await asyncio.wait_for(asyncio.gather(signing_in, client._run("team_calendar", {})), 5)
+        self.assertEqual([op for op, _ in daemon.calls], ["login", "mfa", "team_calendar"])
+        self.assertGreater(client.authenticated_at, 0)
+
+    async def test_a_failed_login_releases_the_waiting_reads(self):
+        daemon = FakeDaemon()
+        client = make(daemon)
+        daemon.on("team_calendar", ok({}))
+        with self.assertRaises(RuntimeError):
+            async with client.authenticating():
+                raise RuntimeError("login failed")
+        await asyncio.wait_for(client._run("team_calendar", {}), 5)
+        self.assertEqual(client.authenticated_at, 0)

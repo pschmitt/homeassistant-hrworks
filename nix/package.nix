@@ -8,7 +8,12 @@ python3Packages.buildPythonApplication {
   pname = "hrworks-employee";
   version = "9.2.0";
   pyproject = true;
-  src = lib.cleanSource ../.;
+  # Without local build output: a stale wheel in dist/ would be packaged as well.
+  src = lib.cleanSourceWith {
+    src = lib.cleanSource ../.;
+    filter =
+      path: _type: !(lib.hasPrefix "dist" (lib.removePrefix (toString ../. + "/") (toString path)));
+  };
   build-system = [ python3Packages.hatchling ];
   dependencies = [
     browser-daemon-client

@@ -49,14 +49,26 @@
         system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
-          python = pkgs.python3.withPackages (ps: [
+          # Home Assistant's own Python package set, so the integration tests (tests/ha) run
+          # in the shell too, against the Home Assistant release nixpkgs ships. Everything
+          # else is built from the same set: one interpreter, no colliding copies.
+          haPython = pkgs.home-assistant.python3Packages;
+          browser-daemon-client = haPython.callPackage "${browser-daemon}/nix/python-client.nix" { };
+          python = haPython.python.withPackages (ps: [
             ps.aiohttp
+            ps.probatio
             ps.rich
             ps.typer
-            browser-daemon.packages.${system}.browser-daemon-client
+            (ps.toPythonModule pkgs.home-assistant)
+            browser-daemon-client
             # Installed distribution metadata for the CLI version lookup; the
             # sources on PYTHONPATH (see shellHook) take precedence.
-            (ps.toPythonModule self.packages.${system}.hrworks)
+            (ps.toPythonModule (
+              self.packages.${system}.hrworks.override {
+                python3Packages = haPython;
+                inherit browser-daemon-client;
+              }
+            ))
           ]);
         in
         {

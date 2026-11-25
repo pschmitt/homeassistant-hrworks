@@ -763,3 +763,25 @@ class AuthenticationTests(unittest.IsolatedAsyncioTestCase):
         flow.async_update_and_abort = MagicMock(return_value={"type": "done"})
         await flow._finish()
         flow.hass.config_entries.async_schedule_reload.assert_called_once_with("entry-id")
+
+
+class SingleFlightRecoveryTests(unittest.IsolatedAsyncioTestCase):
+    """Reads that fail together log in once; a later failure logs in again."""
+
+    async def test_a_recovery_reuses_a_login_made_after_its_failure(self):
+        import time
+
+        from custom_components.hrworks.hrworks.browser_daemon import BrowserDaemonClient
+
+        client = BrowserDaemonClient({"browser_daemon_profile": "p"}, daemon=AsyncMock())
+        client.login = AsyncMock(return_value={"authenticated": True})
+        failed_at = time.monotonic()
+        await authenticate(client, DATA, force=True, since=failed_at)
+        self.assertEqual(client.login.await_count, 1)
+        self.assertEqual(
+            await authenticate(client, DATA, force=True, since=failed_at),
+            {"authenticated": True, "reused": True},
+        )
+        self.assertEqual(client.login.await_count, 1)
+        await authenticate(client, DATA, force=True, since=time.monotonic())
+        self.assertEqual(client.login.await_count, 2)

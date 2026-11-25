@@ -269,6 +269,7 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
 
     async def _snapshot_with_auth(self, payload: dict) -> dict:
         """Recover an expired login, retrying only timed-out portal logins."""
+        started = time.monotonic()
         try:
             try:
                 return await self.client.snapshot(payload)
@@ -300,7 +301,9 @@ class HrworksCoordinator(DataUpdateCoordinator[dict]):
             )
         for attempt in range(len(LOGIN_RETRY_DELAYS) + 1):
             try:
-                await authenticate(self.client, self.entry.data, force=True, hass=self.hass)
+                await authenticate(
+                    self.client, self.entry.data, force=True, hass=self.hass, since=started
+                )
                 break
             except InvalidTotp:
                 self._auth_recovery_blocked = True
