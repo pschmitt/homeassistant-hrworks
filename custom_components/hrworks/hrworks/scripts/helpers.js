@@ -247,13 +247,25 @@ async function login(page, context, { company, username, password, force }) {
   await leaveInterstitial(page);
   if (page.url().includes('2fa-selection')) {
     await page.waitForLoadState('load', { timeout: LOGIN_STEP_TIMEOUT }).catch(() => {});
-    const authenticator = page.getByText(/^(?:Authenticator(?:[- ]App)?|Bitwarden 2FA)$/i).first();
-    try {
-      await authenticator.waitFor({ state: 'visible', timeout: LOGIN_STEP_TIMEOUT });
-    } catch (err) {
-      if (!isTimeout(err)) throw err;
-      throw new PortalError('unsupported_mfa');
+    // The option, found the first way that shows it: its exact label, a known label, or the clickable
+    // entry that names it (the label alone did not match on the live portal, whose entries also carry
+    // a description such as "Bitwarden 2FA created at ...").
+    const candidates = [
+      page.getByText('Authenticator', { exact: true }),
+      page.getByText(/^(?:Authenticator(?:[- ]App)?|Bitwarden 2FA)$/i),
+      page.locator('a, button, [role=button], [onclick], li, .list-group-item').filter({ hasText: /authenticator|bitwarden 2fa/i }).last(),
+    ].map(locator => locator.first());
+    let authenticator = null;
+    for (const until = Date.now() + LOGIN_STEP_TIMEOUT; !authenticator && Date.now() < until; ) {
+      for (const candidate of candidates) {
+        if (await candidate.isVisible().catch(() => false)) {
+          authenticator = candidate;
+          break;
+        }
+      }
+      if (!authenticator) await sleep(250);
     }
+    if (!authenticator) throw new PortalError('unsupported_mfa');
     // Choose Authenticator until the code step shows. The portal's option did not react to a plain
     // click (no navigation, no change at all), so the next tries click its clickable element from the
     // page itself, which no overlay or pending actionability check can swallow, and then force a click.

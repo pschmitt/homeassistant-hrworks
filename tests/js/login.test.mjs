@@ -42,6 +42,11 @@ describe('login', () => {
           }
           return FORM(`location.href='${state.submit}'`);
         case '/2fa-selection': {
+          if (state.described) {
+            // Like the live portal: each entry is one link with a title and a description.
+            return html(`<a href="/2fa-email" class="list-group-item"><h4>Email&nbsp;</h4>Via email to someone@example.com</a>
+              <a href="/2fa-totp" class="list-group-item"><h4>Authenticator&nbsp;</h4>Bitwarden 2FA created at 04/04/24</a>`);
+          }
           if (state.covered) {
             // An invisible layer over the options: a pointer click never reaches them.
             return html(`<a href="/2fa-totp" class="list-group-item"><b>Authenticator</b><small>Bitwarden 2FA</small></a>
@@ -116,6 +121,12 @@ describe('login', () => {
   test('chooses Authenticator even when an invisible layer swallows the pointer click', async () => {
     state.submit = '/2fa-selection';
     state.covered = true;
+    assert.deepEqual(await login(), { mfa_required: true });
+  });
+
+  test('finds the Authenticator entry when its label does not match exactly', async () => {
+    state.submit = '/2fa-selection';
+    state.described = true;
     assert.deepEqual(await login(), { mfa_required: true });
   });
 

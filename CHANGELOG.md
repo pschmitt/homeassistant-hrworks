@@ -21,6 +21,9 @@
   not react to the pointer click at all.
 - The login no longer takes a portal page that is still loading (empty title) for
   the finished login.
+- The Authenticator option is found by its exact label, a known label or the
+  clickable entry naming it; the strict label pattern alone did not find it on the
+  live portal (`unsupported_mfa`).
 
 ## 9.2.0
 
