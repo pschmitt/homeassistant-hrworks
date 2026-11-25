@@ -61,7 +61,7 @@ TIMEOUTS = {
     "assist": 170,
     "team_calendar": 120,
     "company_absences": 300,
-    "login": 90,
+    "login": 150,
     "day": 90,
     "account": 90,
     "mfa": 60,

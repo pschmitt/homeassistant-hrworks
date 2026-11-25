@@ -9,6 +9,10 @@
 - The calendar services no longer log in again per call once the automatic
   recovery has given up; they ask for the repair instead.
 - The development shell provides Home Assistant, so `tests/ha` runs in it.
+- The login follows the portal's waiting page ("Gleich geht's weiter") after the
+  password to the second factor it then asks for. It used to take the waiting page
+  for a finished login, so the next read hit the second factor and failed with
+  `session_expired` or `unsupported_mfa`. The login may take up to 150 seconds.
 
 ## 9.2.0
 

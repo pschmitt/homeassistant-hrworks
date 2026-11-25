@@ -19,6 +19,12 @@ describe('login', () => {
     state = { authenticated: false, submit: '/2fa-totp', factors: ['Authenticator'] };
     portal = await open(url => {
       if (url.hostname === 'ssl6.hrworks.de') {
+        // Like the portal for a browser it does not trust yet: a waiting page, then the second factor.
+        if (url.searchParams.get('after') === 'password' && !state.authenticated) {
+          return html(`<title>Gleich geht's weiter</title><p>Please wait</p><script>setTimeout(() => {
+            location.replace('https://login.hrworks.de/2fa-selection');
+          }, 1500)</script>`);
+        }
         // Like the portal: a signed-out dashboard sends the browser to the login host.
         return state.authenticated
           ? html('<div class="m-portlet">Synthetic dashboard</div>')
@@ -82,6 +88,11 @@ describe('login', () => {
   test('recognizes the Bitwarden 2FA authenticator option', async () => {
     state.submit = '/2fa-selection';
     state.factors = ['E-mail', 'Bitwarden 2FA'];
+    assert.deepEqual(await login(), { mfa_required: true });
+  });
+
+  test('follows the waiting page after the password to the factor selection', async () => {
+    state.submit = `${DASHBOARD}?after=password`;
     assert.deepEqual(await login(), { mfa_required: true });
   });
 

@@ -5,6 +5,10 @@
 
 const LOGIN_URL = 'https://ssl6.hrworks.de/o/dashboard';
 const LOGIN_STEP_TIMEOUT = 15000;
+// How long the portal may take from the password to a step this script knows (see leaveInterstitial).
+const LOGIN_REDIRECT_TIMEOUT = 60000;
+// The portal's waiting page between the password and the next step.
+const INTERSTITIAL = /gleich geht|just a moment|one moment|einen moment/i;
 const VIEWPORT = { width: 1600, height: 1000 };
 const HRWORKS_COOKIES = /(^|\.)hrworks\.de$/;
 const TIME_RE = /^([+−-]?)(\d+):(\d{2})(?:\s*(?:Hours|hours|Stunden))?$/;
@@ -102,6 +106,23 @@ async function ensureViewport(page) {
 }
 
 /** Wait for the portal's event queue and lazy render to become stable. */
+/**
+ * After the password the portal can show a waiting page on /o/ ("Gleich geht's weiter"), bounce
+ * through the login page and only then send a browser it does not trust yet to the second factor.
+ * Follow it until the page is a second-factor step or a portal page that is not the waiting page.
+ */
+async function leaveInterstitial(page) {
+  const until = Date.now() + LOGIN_REDIRECT_TIMEOUT;
+  while (Date.now() < until) {
+    const path = new URL(page.url()).pathname;
+    if (path.includes('2fa')) return;
+    const title = await page.title().catch(() => '');
+    if (path !== '/' && !INTERSTITIAL.test(title)) return;
+    await sleep(500);
+  }
+  throw new PortalError('login_timeout');
+}
+
 async function settle(page) {
   let previous = null;
   let stable = 0;
@@ -222,6 +243,7 @@ async function login(page, context, { company, username, password, force }) {
     page.off('requestfinished', done);
     page.off('requestfailed', done);
   }
+  await leaveInterstitial(page);
   if (page.url().includes('2fa-selection')) {
     const authenticator = page.getByText(/^(?:Authenticator(?:[- ]App)?|Bitwarden 2FA)$/i);
     try {
