@@ -334,6 +334,18 @@ class BrowserDaemonClient:
                         if self._node is None:
                             self._node = found.get("node_name")
                         await self._brand_profile(found)
+                    if not found or not found.get("session_id"):
+                        # The run API otherwise creates a non-persistent browser and
+                        # terminates it when the last client disconnects. HR WORKS
+                        # keeps its authenticated state in the original tab.
+                        await self._client().create_session(
+                            profile=self.browser_profile,
+                            node=self._node,
+                            persistent=True,
+                            engine="chromium",
+                            default_tabs=False,
+                            idle_timeout_minutes=0,
+                        )
                 else:
                     if self._session is None:
                         session = await self._client().create_session(

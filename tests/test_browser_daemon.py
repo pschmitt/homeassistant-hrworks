@@ -228,6 +228,24 @@ class LoginTests(unittest.IsolatedAsyncioTestCase):
         self.daemon.delete_session.assert_not_awaited()
         self.assertEqual(self.client._tab, "shared-tab")
 
+    async def test_idle_named_profile_starts_a_persistent_session(self):
+        self.daemon.find_profile.return_value = {
+            "name": "hrworks",
+            "node_name": "worker",
+            "icon_rev": "icon",
+            "labels": ["ha"],
+        }
+        self.daemon.on("probe", ok())
+        await self.client.health()
+        self.daemon.create_session.assert_awaited_once_with(
+            profile="hrworks",
+            node="worker",
+            persistent=True,
+            engine="chromium",
+            default_tabs=False,
+            idle_timeout_minutes=0,
+        )
+
     async def test_throwaway_login_and_mfa_keep_same_session_and_cleanup(self):
         self.client = BrowserDaemonClient(
             {**SETTINGS, "browser_daemon_profile": ""}, daemon=self.daemon
