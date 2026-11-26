@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Refresh cleanup no longer stops a named browser profile that other clients may be using.
 - Reads that fail together after an expired login now log in once: one login at
   a time, reused by every read that failed before it, and no other operation runs
   in the portal tab between the login and its MFA step. Concurrent calendar reads

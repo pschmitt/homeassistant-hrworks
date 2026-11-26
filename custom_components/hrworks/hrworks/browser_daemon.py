@@ -217,7 +217,7 @@ class BrowserDaemonClient:
 
     async def close(self) -> None:
         self.capabilities = None
-        # The browser session is ended by end_session() after each refresh.
+        # Throwaway sessions are ended by end_session() after each refresh.
         if self._owns_http and self._http is not None:
             await self._http.close()
             self._http = self._daemon = None
@@ -230,22 +230,18 @@ class BrowserDaemonClient:
         await self.close()
 
     async def end_session(self) -> None:
-        """Stop the profile's browser; the saved profile keeps the "remember me" login.
+        """Stop a throwaway browser after a refresh.
 
-        Skipped while an MFA code is awaited (the tab holds the pending login). Never raises.
+        Named profiles may be in use by other clients; their sessions must not be
+        deleted here. Skipped while an MFA code is awaited. Never raises.
         """
-        if self._mfa_started is not None:
+        if self._mfa_started is not None or self.browser_profile:
             return
         async with self._lock:
             self._tab = None
             try:
                 client = self._client()
-                if self.browser_profile:
-                    found = await client.find_profile(self.browser_profile)
-                    session = (found or {}).get("session_id")
-                    node = (found or {}).get("node_name")
-                else:
-                    session, node = self._session, self._node
+                session, node = self._session, self._node
                 if session:
                     await client.delete_session(session, node=node)
                 self._session = None

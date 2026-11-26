@@ -219,6 +219,15 @@ class LoginTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(self.daemon.calls[0][1]["profile"], "ha-hrworks")
 
+    async def test_shared_profile_cleanup_does_not_stop_other_clients(self):
+        self.client = BrowserDaemonClient(
+            {**SETTINGS, "browser_daemon_profile": "ha-hrworks"}, daemon=self.daemon
+        )
+        self.client._tab = "shared-tab"
+        await self.client.end_session()
+        self.daemon.delete_session.assert_not_awaited()
+        self.assertEqual(self.client._tab, "shared-tab")
+
     async def test_throwaway_login_and_mfa_keep_same_session_and_cleanup(self):
         self.client = BrowserDaemonClient(
             {**SETTINGS, "browser_daemon_profile": ""}, daemon=self.daemon
