@@ -51,8 +51,8 @@ hrworks auth login
 ```
 
 The optional `rbw` provider reads the username, password, TOTP URI, and a custom
-field named `Company ID` into memory. Unlock rbw first. If the entry lacks a
-company ID, set it with `config init --company-id ...`. Login can also prompt for
+field named `Company ID` or `company` into memory. Unlock rbw first. If the entry
+lacks a company ID, set it with `config init --company-id ...`. Login can also prompt for
 missing credentials when both input and output are terminals.
 
 ## Output

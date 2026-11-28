@@ -122,16 +122,12 @@ def credentials(settings: dict) -> dict:
             if not result.get("totp_uri") and login.get("totp"):
                 result["totp_uri"] = login["totp"]
             if not result.get("company_id"):
-                field = next(
-                    (
-                        f
-                        for f in item.get("fields", [])
-                        if f.get("name", "").casefold() == "company id"
-                    ),
-                    None,
-                )
-                if field:
-                    result["company_id"] = field.get("value")
+                fields = {
+                    (f.get("name") or "").casefold(): f.get("value")
+                    for f in item.get("fields") or []
+                }
+                if company := fields.get("company id") or fields.get("company"):
+                    result["company_id"] = company
         except (OSError, subprocess.SubprocessError, ValueError, TypeError):
             raise WorkerError("credential_provider") from None
     return result

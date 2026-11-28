@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The CLI's rbw provider also reads the company ID from a custom field named
+  `company`; `Company ID` still wins.
 - Refresh cleanup no longer stops a named browser profile that other clients may be using.
 - Start named profiles as persistent browser sessions so the daemon keeps the login tab between reads.
 - Reads that fail together after an expired login now log in once: one login at
